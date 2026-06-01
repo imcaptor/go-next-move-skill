@@ -58,7 +58,7 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --result-image /tmp/go-next-result.jpg
 ```
 
-`--source-overlay` 会在原照片上标出识别到的棋子和棋盘边界，适合给用户检查识别是否正确。`--source-result-image` 是合并后的最终图：已有棋子保持 B/W 校验标记，新推荐落点用红色序号 `1` 标记。`--overlay` 是透视矫正后的棋盘裁切图，主要用于调试。`--result-image` 会生成一张干净棋盘图，并用红圈 / 红点标出推荐下一手。
+`--source-overlay` 会在原照片上标出识别到的棋子和棋盘边界，适合给用户检查识别是否正确。`--source-result-image` 是合并后的最终图：已有白子用黑色 `W` 标记，已有黑子用白色 `B` 标记；新推荐落点会画出对应颜色的新棋子，并在新棋子上写序号 `1`。`--overlay` 是透视矫正后的棋盘裁切图，主要用于调试。`--result-image` 会生成一张干净棋盘图，并用红圈 / 红点标出推荐下一手。
 
 如果自动识别棋盘不准，可以手动传四个棋盘角点：
 
@@ -147,7 +147,7 @@ cat board_ascii.txt | python3 scripts/next_move.py \
 - `board_ascii`：实际送入 KataGo 的棋盘
 - `recognition`：图片识别元数据，仅图片输入时存在
 - `result_image`：带推荐落点标记的结果图路径，仅传入 `--result-image` 时存在
-- `source_result_image`：原照片合并图路径，已有棋子用 B/W 标记，推荐落点用序号 `1` 标记
+- `source_result_image`：原照片合并图路径，已有棋子用 B/W 文字标记，推荐落点用带序号 `1` 的新棋子标记
 - `recognition.source_overlay`：原照片识别校验图路径，仅传入 `--source-overlay` 时存在
 
 输出形状示例：

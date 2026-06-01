@@ -52,7 +52,7 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --result-image /tmp/go-next-result.jpg
 ```
 
-`--source-overlay` marks detected stones and board corners on the original photo, which is the best user-facing recognition check. `--source-result-image` is the combined final image: existing stones keep B/W verification labels and the recommended move is marked with the red numbered label `1`. `--overlay` writes a warped/cropped board view for debugging. `--result-image` writes a clean board image with the recommended move marked by a red ring / dot.
+`--source-overlay` marks detected stones and board corners on the original photo, which is the best user-facing recognition check. `--source-result-image` is the combined final image: existing white stones are marked with black `W`, existing black stones are marked with white `B`, and the recommended move is drawn as a new stone with the numbered label `1`. `--overlay` writes a warped/cropped board view for debugging. `--result-image` writes a clean board image with the recommended move marked by a red ring / dot.
 
 If board detection needs help, pass four board corners:
 
@@ -141,7 +141,7 @@ The script prints JSON. Important fields:
 - `board_ascii`: the position that was analyzed
 - `recognition`: image recognition metadata, present only for image input
 - `result_image`: path to the generated recommendation image, present only when `--result-image` is passed
-- `source_result_image`: path to the combined original-photo image, with existing stones marked B/W and the recommended move marked as `1`
+- `source_result_image`: path to the combined original-photo image, with existing stones marked by B/W text and the recommended move drawn as a numbered stone
 - `recognition.source_overlay`: path to the source-photo recognition check, present only when `--source-overlay` is passed
 
 Example shape:

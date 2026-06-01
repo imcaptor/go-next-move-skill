@@ -364,7 +364,8 @@ def render_source_overlay(
 
     height, width = image.shape[:2]
     label_radius = max(7, int(round(min(height, width) / 95)))
-    font_scale = max(0.42, min(height, width) / 2600.0)
+    font_scale = max(0.55, min(height, width) / 2100.0)
+    thickness = max(2, int(round(min(height, width) / 520.0)))
 
     for row in range(len(board)):
         for col in range(len(board)):
@@ -375,17 +376,17 @@ def render_source_overlay(
             x, y = int(round(float(source_point[0]))), int(round(float(source_point[1])))
             if not (0 <= x < width and 0 <= y < height):
                 continue
-            color = (0, 0, 255) if value == "B" else (255, 0, 0)
-            text_color = color
-            cv2.circle(overlay, (x, y), label_radius, color, 2, lineType=cv2.LINE_AA)
+            text_color = (255, 255, 255) if value == "B" else (0, 0, 0)
+            (text_w, text_h), baseline = cv2.getTextSize(value, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            origin = (x - text_w // 2, y + (text_h - baseline) // 2)
             cv2.putText(
                 overlay,
                 value,
-                (x - label_radius // 2, y + label_radius // 2),
+                origin,
                 cv2.FONT_HERSHEY_SIMPLEX,
                 font_scale,
                 text_color,
-                2,
+                thickness,
                 lineType=cv2.LINE_AA,
             )
     return overlay

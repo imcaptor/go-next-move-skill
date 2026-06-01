@@ -145,17 +145,26 @@ def draw_recommendation_marker(
     cv2.circle(image, center, max(2, marker_radius // 3), (245, 245, 245), -1, lineType=cv2.LINE_AA)
 
 
-def draw_numbered_source_marker(image: np.ndarray, center: tuple[int, int], label: str = "1") -> None:
+def draw_numbered_source_stone(image: np.ndarray, center: tuple[int, int], side_to_move: str, label: str = "1") -> None:
     height, width = image.shape[:2]
-    radius = max(18, int(round(min(height, width) / 42)))
-    cv2.circle(image, center, radius + 7, (255, 255, 255), -1, lineType=cv2.LINE_AA)
-    cv2.circle(image, center, radius + 7, (0, 0, 255), 4, lineType=cv2.LINE_AA)
-    cv2.circle(image, center, radius, (0, 0, 255), -1, lineType=cv2.LINE_AA)
-    font_scale = max(0.78, radius / 24.0)
-    thickness = max(2, int(round(radius / 10)))
+    stone_radius = max(18, int(round(min(height, width) / 43)))
+    shadow_offset = max(2, stone_radius // 9)
+    blend_circle(image, (center[0] + shadow_offset, center[1] + shadow_offset), stone_radius, (50, 60, 78), 0.20)
+    if side_to_move == "W":
+        cv2.circle(image, center, stone_radius, (238, 235, 222), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, (center[0] - stone_radius // 4, center[1] - stone_radius // 4), max(3, stone_radius // 3), (255, 252, 244), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, center, stone_radius, (140, 135, 125), 1, lineType=cv2.LINE_AA)
+        text_color = (0, 0, 0)
+    else:
+        cv2.circle(image, center, stone_radius, (22, 22, 24), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, (center[0] - stone_radius // 4, center[1] - stone_radius // 4), max(2, stone_radius // 4), (58, 58, 62), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, center, stone_radius, (5, 5, 7), 2, lineType=cv2.LINE_AA)
+        text_color = (255, 255, 255)
+    font_scale = max(1.0, min(height, width) / 1150.0)
+    thickness = max(3, int(round(min(height, width) / 360.0)))
     (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
     origin = (center[0] - text_w // 2, center[1] + (text_h - baseline) // 2)
-    cv2.putText(image, label, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness, lineType=cv2.LINE_AA)
+    cv2.putText(image, label, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, text_color, thickness, lineType=cv2.LINE_AA)
 
 
 def render_source_recommendation_image(
@@ -180,7 +189,7 @@ def render_source_recommendation_image(
     row, col = parsed
     point = grid_to_source_point(row, col, corners, xfit, yfit, warp_size)
     center = (int(round(float(point[0]))), int(round(float(point[1]))))
-    draw_numbered_source_marker(overlay, center, "1")
+    draw_numbered_source_stone(overlay, center, side_to_move, "1")
     return overlay
 
 
