@@ -359,11 +359,6 @@ def render_source_overlay(
 ) -> np.ndarray:
     overlay = image.copy()
     source_corners = order_points(np.array(corners, dtype=np.float32))
-    warped_corners = np.array(
-        [[0, 0], [warp_size - 1, 0], [warp_size - 1, warp_size - 1], [0, warp_size - 1]],
-        dtype=np.float32,
-    )
-    transform = cv2.getPerspectiveTransform(warped_corners, source_corners)
     polygon = source_corners.astype(np.int32).reshape((-1, 1, 2))
     cv2.polylines(overlay, [polygon], True, (0, 0, 255), 3, lineType=cv2.LINE_AA)
 
@@ -376,8 +371,7 @@ def render_source_overlay(
             value = board[row][col]
             if value not in {"B", "W"}:
                 continue
-            warped_point = np.array([[[xfit.offset + col * xfit.spacing, yfit.offset + row * yfit.spacing]]], dtype=np.float32)
-            source_point = cv2.perspectiveTransform(warped_point, transform)[0, 0]
+            source_point = grid_to_source_point(row, col, source_corners, xfit, yfit, warp_size)
             x, y = int(round(float(source_point[0]))), int(round(float(source_point[1])))
             if not (0 <= x < width and 0 <= y < height):
                 continue
@@ -395,6 +389,24 @@ def render_source_overlay(
                 lineType=cv2.LINE_AA,
             )
     return overlay
+
+
+def grid_to_source_point(
+    row: int,
+    col: int,
+    corners: list[list[float]] | np.ndarray,
+    xfit: GridFit,
+    yfit: GridFit,
+    warp_size: int,
+) -> np.ndarray:
+    source_corners = order_points(np.array(corners, dtype=np.float32))
+    warped_corners = np.array(
+        [[0, 0], [warp_size - 1, 0], [warp_size - 1, warp_size - 1], [0, warp_size - 1]],
+        dtype=np.float32,
+    )
+    transform = cv2.getPerspectiveTransform(warped_corners, source_corners)
+    warped_point = np.array([[[xfit.offset + col * xfit.spacing, yfit.offset + row * yfit.spacing]]], dtype=np.float32)
+    return cv2.perspectiveTransform(warped_point, transform)[0, 0]
 
 
 def recognize_board(

@@ -54,10 +54,11 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --visits 400 \
   --overlay /tmp/go-next-overlay.jpg \
   --source-overlay /tmp/go-source-overlay.jpg \
+  --source-result-image /tmp/go-source-result.jpg \
   --result-image /tmp/go-next-result.jpg
 ```
 
-`--source-overlay` 会在原照片上标出识别到的棋子和棋盘边界，适合给用户检查识别是否正确。`--overlay` 是透视矫正后的棋盘裁切图，主要用于调试。`--result-image` 会生成一张干净棋盘图，并用红圈 / 红点标出推荐下一手，适合直接发给用户看。
+`--source-overlay` 会在原照片上标出识别到的棋子和棋盘边界，适合给用户检查识别是否正确。`--source-result-image` 会把推荐下一手直接叠在原照片上，这是图片输入时最适合发给用户看的结果。`--overlay` 是透视矫正后的棋盘裁切图，主要用于调试。`--result-image` 会生成一张干净棋盘图，并用红圈 / 红点标出推荐下一手。
 
 如果自动识别棋盘不准，可以手动传四个棋盘角点：
 
@@ -146,6 +147,7 @@ cat board_ascii.txt | python3 scripts/next_move.py \
 - `board_ascii`：实际送入 KataGo 的棋盘
 - `recognition`：图片识别元数据，仅图片输入时存在
 - `result_image`：带推荐落点标记的结果图路径，仅传入 `--result-image` 时存在
+- `source_result_image`：在原照片上标记推荐落点的结果图路径，仅传入 `--source-result-image` 时存在
 - `recognition.source_overlay`：原照片识别校验图路径，仅传入 `--source-overlay` 时存在
 
 输出形状示例：

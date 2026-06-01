@@ -48,10 +48,11 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --visits 400 \
   --overlay /tmp/go-next-overlay.jpg \
   --source-overlay /tmp/go-source-overlay.jpg \
+  --source-result-image /tmp/go-source-result.jpg \
   --result-image /tmp/go-next-result.jpg
 ```
 
-`--source-overlay` marks detected stones and board corners on the original photo, which is the best user-facing recognition check. `--overlay` writes a warped/cropped board view for debugging. `--result-image` writes a clean board image with the recommended move marked by a red ring / dot, which is friendlier to show to users.
+`--source-overlay` marks detected stones and board corners on the original photo, which is the best user-facing recognition check. `--source-result-image` overlays the recommended move directly on the original photo and is the preferred user-facing result for photo input. `--overlay` writes a warped/cropped board view for debugging. `--result-image` writes a clean board image with the recommended move marked by a red ring / dot.
 
 If board detection needs help, pass four board corners:
 
@@ -140,6 +141,7 @@ The script prints JSON. Important fields:
 - `board_ascii`: the position that was analyzed
 - `recognition`: image recognition metadata, present only for image input
 - `result_image`: path to the generated recommendation image, present only when `--result-image` is passed
+- `source_result_image`: path to the original-photo recommendation overlay, present only when `--source-result-image` is passed
 - `recognition.source_overlay`: path to the source-photo recognition check, present only when `--source-overlay` is passed
 
 Example shape:

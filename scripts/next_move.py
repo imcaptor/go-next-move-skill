@@ -18,7 +18,7 @@ except ImportError as exc:
         "python3 -m pip install -r scripts/requirements.txt"
     ) from exc
 
-from go_board_recognition import read_image, recognize_board, render_overlay, render_source_overlay, write_image
+from go_board_recognition import GridFit, grid_to_source_point, read_image, recognize_board, render_overlay, render_source_overlay, write_image
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -145,6 +145,47 @@ def draw_recommendation_marker(
     cv2.circle(image, center, max(2, marker_radius // 3), (245, 245, 245), -1, lineType=cv2.LINE_AA)
 
 
+def draw_source_recommendation_marker(image: np.ndarray, center: tuple[int, int], side_to_move: str, occupied: bool) -> None:
+    height, width = image.shape[:2]
+    radius = max(16, int(round(min(height, width) / 36)))
+    if not occupied:
+        color = (245, 245, 245) if side_to_move == "W" else (22, 22, 24)
+        outline = (40, 40, 40) if side_to_move == "W" else (230, 230, 230)
+        cv2.circle(image, center, radius, color, -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, center, radius, outline, 2, lineType=cv2.LINE_AA)
+    cv2.circle(image, center, max(radius + 7, int(radius * 1.28)), (0, 0, 255), 5, lineType=cv2.LINE_AA)
+    cv2.circle(image, center, max(7, radius // 3), (0, 0, 255), -1, lineType=cv2.LINE_AA)
+    cv2.circle(image, center, max(3, radius // 8), (255, 255, 255), -1, lineType=cv2.LINE_AA)
+
+
+def render_source_recommendation_image(
+    image: np.ndarray,
+    rows: list[str],
+    recommendation: dict[str, Any] | None,
+    side_to_move: str,
+    corners: list[list[float]],
+    xfit: GridFit,
+    yfit: GridFit,
+    warp_size: int,
+) -> np.ndarray:
+    overlay = image.copy()
+    source_corners = np.array(corners, dtype=np.float32)
+    cv2.polylines(overlay, [source_corners.astype(np.int32).reshape((-1, 1, 2))], True, (0, 0, 255), 3, lineType=cv2.LINE_AA)
+    move = recommendation.get("move") if recommendation else None
+    if not move:
+        return overlay
+    parsed = parse_gtp_coord(str(move), len(rows))
+    if parsed is None:
+        cv2.putText(overlay, "PASS", (36, 72), cv2.FONT_HERSHEY_SIMPLEX, 1.6, (0, 0, 255), 5, lineType=cv2.LINE_AA)
+        return overlay
+    row, col = parsed
+    point = grid_to_source_point(row, col, corners, xfit, yfit, warp_size)
+    center = (int(round(float(point[0]))), int(round(float(point[1]))))
+    occupied = rows[row][col] != "."
+    draw_source_recommendation_marker(overlay, center, side_to_move, occupied)
+    return overlay
+
+
 def render_recommendation_board(
     rows: list[str],
     recommendation: dict[str, Any] | None,
@@ -197,7 +238,7 @@ def render_recommendation_board(
     return image
 
 
-def load_board_source(args: argparse.Namespace) -> tuple[list[str], dict[str, Any] | None]:
+def load_board_source(args: argparse.Namespace) -> tuple[list[str], dict[str, Any] | None, dict[str, Any] | None]:
     source = Path(args.source) if args.source else None
     input_kind = args.input
     if input_kind == "auto":
@@ -223,13 +264,19 @@ def load_board_source(args: argparse.Namespace) -> tuple[list[str], dict[str, An
             source_overlay = render_source_overlay(read_image(source), recognition["board_corners"], board, xfit, yfit, args.warp_size)
             write_image(args.source_overlay, source_overlay)
             recognition["source_overlay"] = str(args.source_overlay)
-        return list(recognition["board_ascii"]), recognition
+        image_context = {
+            "source": source,
+            "board": board,
+            "xfit": xfit,
+            "yfit": yfit,
+        }
+        return list(recognition["board_ascii"]), recognition, image_context
 
     if source:
         text = source.read_text(encoding="utf-8")
     else:
         text = sys.stdin.read()
-    return parse_board_ascii(text), None
+    return parse_board_ascii(text), None, None
 
 
 def run_katago_analysis(
@@ -560,7 +607,7 @@ def recommendations_by_level(candidates: list[dict[str, Any]]) -> dict[str, dict
 def build_result(args: argparse.Namespace) -> dict[str, Any]:
     side_to_move = normalize_player(args.side_to_move)
     level = normalize_level(args.level)
-    rows, recognition = load_board_source(args)
+    rows, recognition, image_context = load_board_source(args)
     if len(rows) != args.board_size:
         raise SystemExit(f"Expected {args.board_size} board rows, got {len(rows)}")
 
@@ -606,6 +653,21 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         result_image = render_recommendation_board(rows, selected, side_to_move, args.result_size)
         write_image(args.result_image, result_image)
         result["result_image"] = str(args.result_image)
+    if args.source_result_image:
+        if recognition is None or image_context is None:
+            raise SystemExit("--source-result-image requires image input")
+        source_result = render_source_recommendation_image(
+            read_image(image_context["source"]),
+            rows,
+            selected,
+            side_to_move,
+            recognition["board_corners"],
+            image_context["xfit"],
+            image_context["yfit"],
+            args.warp_size,
+        )
+        write_image(args.source_result_image, source_result)
+        result["source_result_image"] = str(args.source_result_image)
     return result
 
 
@@ -625,6 +687,7 @@ def main() -> int:
     parser.add_argument("--overlay", type=Path, help="Write a recognition overlay when input is an image")
     parser.add_argument("--source-overlay", type=Path, help="Write a recognition overlay on the original source image")
     parser.add_argument("--result-image", type=Path, help="Write a clean board image with the recommended move marked")
+    parser.add_argument("--source-result-image", type=Path, help="Write the recommended move overlay on the original source image")
     parser.add_argument("--result-size", type=int, default=1200, help="Pixel size for --result-image, default: 1200")
     parser.add_argument("--katago", default="katago", help="Path to katago executable")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="KataGo model path")

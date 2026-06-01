@@ -59,12 +59,15 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --visits 400 \
   --overlay /tmp/go-next-overlay.jpg \
   --source-overlay /tmp/go-source-overlay.jpg \
+  --source-result-image /tmp/go-source-result.jpg \
   --result-image /tmp/go-next-result.jpg
 ```
 
 Use `--result-image` when interacting with a user. It renders the recognized `board_ascii` as a clean board and marks the recommended move with a red ring/dot. This makes the answer easier to understand and lets the user compare the recognized board against the real board.
 
 Use `--source-overlay` for user-facing recognition verification. It marks detected stones on the original photo. `--overlay` is a warped/cropped board view for debugging and may not look like the original photo.
+
+Prefer `--source-result-image` for the final user-facing image when the input is a photo. It overlays the recommended move directly on the original photo, which makes recognition mistakes easier to spot.
 
 For an already recognized board:
 
@@ -90,6 +93,7 @@ The script returns JSON containing:
 - `candidate_moves`
 - `root_info`
 - optional `result_image` when `--result-image` is passed
+- optional `source_result_image` when `--source-result-image` is passed
 - optional `recognition` metadata when input is an image
 
 ## Playing-Strength Levels
@@ -109,7 +113,7 @@ The current script chooses levels by candidate rank plus score/winrate loss from
 When answering a user, include:
 
 1. The recommended coordinate.
-2. The generated `result_image`.
+2. The generated `source_result_image` for photo input, or `result_image` for ASCII input.
 3. A concise reason based on `reason.summary`, `reason.main_variation`, and candidate comparisons.
 4. The `recognition.source_overlay` image when available.
 5. A recognition caveat if the rendered board or source overlay does not match the real photo.
