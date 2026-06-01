@@ -132,6 +132,7 @@ The current selection policy uses candidate rank plus score and winrate loss fro
 The script prints JSON. Important fields:
 
 - `recommendation`: the move selected for `--level`
+- `reason`: recommendation rationale, including selection basis, main variation, candidate comparison, and recognition caveats
 - `recommendations_by_level`: beginner, intermediate, and advanced choices
 - `candidate_moves`: KataGo candidates with visits, winrate, score lead, and PV
 - `root_info`: KataGo root evaluation
@@ -149,6 +150,10 @@ Example shape:
     "strength_level": "intermediate",
     "score_loss_vs_best": 0.8,
     "winrate_loss_vs_best": 0.03
+  },
+  "reason": {
+    "summary": "Recommended move for white: Q4. This is a near-best candidate selected for intermediate strength. Main line: Q4 -> D16 -> C17.",
+    "main_variation": ["Q4", "D16", "C17"]
   },
   "recommendations_by_level": {
     "beginner": {},

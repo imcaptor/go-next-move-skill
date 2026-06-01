@@ -138,6 +138,7 @@ cat board_ascii.txt | python3 scripts/next_move.py \
 脚本输出 JSON。重要字段：
 
 - `recommendation`：按 `--level` 选出的推荐手
+- `reason`：推荐原因，包含选择依据、主变化、候选手对比和识别风险提示
 - `recommendations_by_level`：初级、中级、高级三档推荐
 - `candidate_moves`：KataGo 候选手，包含 visits、winrate、score lead 和 PV
 - `root_info`：KataGo 根节点评估
@@ -155,6 +156,10 @@ cat board_ascii.txt | python3 scripts/next_move.py \
     "strength_level": "intermediate",
     "score_loss_vs_best": 0.8,
     "winrate_loss_vs_best": 0.03
+  },
+  "reason": {
+    "summary": "建议白棋走 Q4。这是按中级强度选择的近似最优候选手。主变化参考：Q4 -> D16 -> C17。",
+    "main_variation": ["Q4", "D16", "C17"]
   },
   "recommendations_by_level": {
     "beginner": {},

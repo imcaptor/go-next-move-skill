@@ -349,6 +349,107 @@ def winrate_loss(best: dict[str, Any], move: dict[str, Any]) -> float | None:
     return max(0.0, float(best["winrate"]) - float(move["winrate"]))
 
 
+def percent(value: Any) -> str | None:
+    if value is None:
+        return None
+    return f"{float(value) * 100:.1f}%"
+
+
+def points(value: Any) -> str | None:
+    if value is None:
+        return None
+    return f"{float(value):+.1f}"
+
+
+def side_name(side_to_move: str) -> str:
+    return "白棋" if side_to_move == "W" else "黑棋"
+
+
+def move_reason(
+    recommendation: dict[str, Any] | None,
+    candidates: list[dict[str, Any]],
+    root_info: dict[str, Any],
+    side_to_move: str,
+    requested_level: str,
+    recognition: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    if not recommendation:
+        return None
+
+    move = str(recommendation.get("move", "unknown"))
+    visits = recommendation.get("visits")
+    winrate = percent(recommendation.get("winrate"))
+    score_lead = points(recommendation.get("scoreLead"))
+    pv = recommendation.get("pv", [])
+    selection_reason = recommendation.get("selection_reason")
+
+    summary_parts = [f"建议{side_name(side_to_move)}走 {move}。"]
+    if requested_level == "advanced":
+        summary_parts.append("这是 KataGo 当前搜索排序第一的候选手。")
+    elif requested_level == "intermediate":
+        summary_parts.append("这是按中级强度选择的近似最优候选手。")
+    elif requested_level == "beginner":
+        summary_parts.append("这是按初级强度选择的较温和候选手。")
+    else:
+        summary_parts.append("当前 `recommendation` 默认使用高级强度。")
+    if visits is not None:
+        summary_parts.append(f"该手获得 {visits} 次访问。")
+    if winrate is not None or score_lead is not None:
+        eval_bits = []
+        if winrate is not None:
+            eval_bits.append(f"胜率 {winrate}")
+        if score_lead is not None:
+            eval_bits.append(f"目差 {score_lead}")
+        summary_parts.append("KataGo 对该手的评估为：" + "，".join(eval_bits) + "。")
+    if pv:
+        summary_parts.append("主变化参考：" + " -> ".join(str(item) for item in pv[:6]) + "。")
+
+    comparisons = []
+    for candidate in candidates[:5]:
+        if candidate.get("move") == recommendation.get("move"):
+            continue
+        item = {
+            "move": candidate.get("move"),
+            "order": candidate.get("order"),
+            "visits": candidate.get("visits"),
+            "winrate": candidate.get("winrate"),
+            "scoreLead": candidate.get("scoreLead"),
+        }
+        loss = score_loss(recommendation, candidate)
+        wr_loss = winrate_loss(recommendation, candidate)
+        if loss is not None:
+            item["score_loss_vs_recommendation"] = round(loss, 3)
+        if wr_loss is not None:
+            item["winrate_loss_vs_recommendation"] = round(wr_loss, 4)
+        comparisons.append(item)
+
+    caveats = []
+    if recognition is not None:
+        warnings = recognition.get("warnings") or []
+        if warnings:
+            caveats.extend(str(warning) for warning in warnings)
+        caveats.append("推荐基于识别出的 board_ascii；如果结果图和真实棋盘不一致，应先修正识别再采纳下一手。")
+
+    return {
+        "summary": "".join(summary_parts),
+        "selection_reason": selection_reason,
+        "main_variation": pv,
+        "root_evaluation": {
+            "visits": root_info.get("visits"),
+            "winrate": root_info.get("winrate"),
+            "scoreLead": root_info.get("scoreLead"),
+        },
+        "recommended_evaluation": {
+            "visits": visits,
+            "winrate": recommendation.get("winrate"),
+            "scoreLead": recommendation.get("scoreLead"),
+            "scoreStdev": recommendation.get("scoreStdev"),
+        },
+        "comparison_candidates": comparisons,
+        "caveats": caveats,
+    }
+
+
 def annotate_strength(best: dict[str, Any], move: dict[str, Any], level: str, reason: str) -> dict[str, Any]:
     annotated = dict(move)
     loss = score_loss(best, move)
@@ -473,6 +574,8 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     candidates = [slim_move_info(move) for move in move_infos[: args.top_candidates]]
     by_level = recommendations_by_level(candidates)
     selected = by_level["advanced"] if level == "all" else by_level[level]
+    root_info = analysis.get("rootInfo", {})
+    reason = move_reason(selected, candidates, root_info, side_to_move, level, recognition)
     result = {
         "board_size": len(rows),
         "side_to_move": side_to_move,
@@ -482,9 +585,10 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "visits_requested": args.visits,
         "board_ascii": rows,
         "recommendation": selected,
+        "reason": reason,
         "recommendations_by_level": by_level,
         "candidate_moves": candidates,
-        "root_info": analysis.get("rootInfo", {}),
+        "root_info": root_info,
         "katago_warnings": analysis.get("warnings", []),
         "level_policy": {
             "beginner": "Choose a plausible lower-ranked move with a moderate score/winrate loss when available.",

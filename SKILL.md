@@ -82,6 +82,7 @@ The script returns JSON containing:
 
 - `board_ascii`
 - `recommendation`
+- `reason`
 - `recommendations_by_level`
 - `candidate_moves`
 - `root_info`
@@ -99,6 +100,17 @@ The level controls move strength, not explanation depth.
 Use `--level all` when the caller wants all three recommendations at once. Use `recommendation` for the selected level and `recommendations_by_level` to compare the three outputs.
 
 The current script chooses levels by candidate rank plus score/winrate loss from KataGo's best move. These thresholds are a practical first pass, not calibrated ranks. The next improvement should tune them with real game examples.
+
+## User-Facing Response
+
+When answering a user, include:
+
+1. The recommended coordinate.
+2. The generated `result_image`.
+3. A concise reason based on `reason.summary`, `reason.main_variation`, and candidate comparisons.
+4. A recognition caveat if the rendered board or overlay does not match the real photo.
+
+Do not invent tactical explanations that are not supported by KataGo data or visible board context. If recognition looks wrong, say the recommendation is not reliable until the board is corrected.
 
 ## Notes
 
