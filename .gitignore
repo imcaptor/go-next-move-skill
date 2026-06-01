@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+
+katago_logs/
+katago_analysis_logs/
+
+.DS_Store
