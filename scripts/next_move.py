@@ -18,7 +18,7 @@ except ImportError as exc:
         "python3 -m pip install -r scripts/requirements.txt"
     ) from exc
 
-from go_board_recognition import recognize_board, render_overlay, write_image
+from go_board_recognition import read_image, recognize_board, render_overlay, render_source_overlay, write_image
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -219,6 +219,10 @@ def load_board_source(args: argparse.Namespace) -> tuple[list[str], dict[str, An
         if args.overlay:
             write_image(args.overlay, render_overlay(warped, board, xfit, yfit))
             recognition["overlay"] = str(args.overlay)
+        if args.source_overlay:
+            source_overlay = render_source_overlay(read_image(source), recognition["board_corners"], board, xfit, yfit, args.warp_size)
+            write_image(args.source_overlay, source_overlay)
+            recognition["source_overlay"] = str(args.source_overlay)
         return list(recognition["board_ascii"]), recognition
 
     if source:
@@ -619,6 +623,7 @@ def main() -> int:
     parser.add_argument("--corners", help="Manual image board corners as 'x,y x,y x,y x,y'")
     parser.add_argument("--grid-corners", action="store_true", help="Treat --corners as outer grid intersections")
     parser.add_argument("--overlay", type=Path, help="Write a recognition overlay when input is an image")
+    parser.add_argument("--source-overlay", type=Path, help="Write a recognition overlay on the original source image")
     parser.add_argument("--result-image", type=Path, help="Write a clean board image with the recommended move marked")
     parser.add_argument("--result-size", type=int, default=1200, help="Pixel size for --result-image, default: 1200")
     parser.add_argument("--katago", default="katago", help="Path to katago executable")

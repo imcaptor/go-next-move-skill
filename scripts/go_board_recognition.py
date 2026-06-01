@@ -349,6 +349,54 @@ def render_overlay(warped: np.ndarray, board: list[list[str]], xfit: GridFit, yf
     return overlay
 
 
+def render_source_overlay(
+    image: np.ndarray,
+    corners: list[list[float]] | np.ndarray,
+    board: list[list[str]],
+    xfit: GridFit,
+    yfit: GridFit,
+    warp_size: int,
+) -> np.ndarray:
+    overlay = image.copy()
+    source_corners = order_points(np.array(corners, dtype=np.float32))
+    warped_corners = np.array(
+        [[0, 0], [warp_size - 1, 0], [warp_size - 1, warp_size - 1], [0, warp_size - 1]],
+        dtype=np.float32,
+    )
+    transform = cv2.getPerspectiveTransform(warped_corners, source_corners)
+    polygon = source_corners.astype(np.int32).reshape((-1, 1, 2))
+    cv2.polylines(overlay, [polygon], True, (0, 0, 255), 3, lineType=cv2.LINE_AA)
+
+    height, width = image.shape[:2]
+    label_radius = max(7, int(round(min(height, width) / 95)))
+    font_scale = max(0.42, min(height, width) / 2600.0)
+
+    for row in range(len(board)):
+        for col in range(len(board)):
+            value = board[row][col]
+            if value not in {"B", "W"}:
+                continue
+            warped_point = np.array([[[xfit.offset + col * xfit.spacing, yfit.offset + row * yfit.spacing]]], dtype=np.float32)
+            source_point = cv2.perspectiveTransform(warped_point, transform)[0, 0]
+            x, y = int(round(float(source_point[0]))), int(round(float(source_point[1])))
+            if not (0 <= x < width and 0 <= y < height):
+                continue
+            color = (0, 0, 255) if value == "B" else (255, 0, 0)
+            text_color = color
+            cv2.circle(overlay, (x, y), label_radius, color, 2, lineType=cv2.LINE_AA)
+            cv2.putText(
+                overlay,
+                value,
+                (x - label_radius // 2, y + label_radius // 2),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                text_color,
+                2,
+                lineType=cv2.LINE_AA,
+            )
+    return overlay
+
+
 def recognize_board(
     image_path: Path,
     board_size: int = 19,
@@ -401,12 +449,17 @@ def main() -> int:
     parser.add_argument("--corners", help="Four board corners as 'x,y x,y x,y x,y', clockwise from top-left")
     parser.add_argument("--grid-corners", action="store_true", help="Treat --corners as outer grid intersections")
     parser.add_argument("--overlay", type=Path, help="Write a warped-board overlay image for verification")
+    parser.add_argument("--source-overlay", type=Path, help="Write an overlay on the original source image for verification")
     args = parser.parse_args()
 
     result, warped, board, xfit, yfit = recognize_board(args.image, args.board_size, args.warp_size, args.corners, args.grid_corners)
     if args.overlay:
         write_image(args.overlay, render_overlay(warped, board, xfit, yfit))
         result["overlay"] = str(args.overlay)
+    if args.source_overlay:
+        source_overlay = render_source_overlay(read_image(args.image), result["board_corners"], board, xfit, yfit, args.warp_size)
+        write_image(args.source_overlay, source_overlay)
+        result["source_overlay"] = str(args.source_overlay)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
