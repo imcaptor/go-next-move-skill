@@ -52,8 +52,11 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --side-to-move black \
   --level intermediate \
   --visits 400 \
-  --overlay /tmp/go-next-overlay.jpg
+  --overlay /tmp/go-next-overlay.jpg \
+  --result-image /tmp/go-next-result.jpg
 ```
+
+`--overlay` 是在原始识别结果上标出黑白棋，适合检查图片识别是否正确。`--result-image` 会生成一张干净棋盘图，并用红圈 / 红点标出推荐下一手，适合直接发给用户看。
 
 如果自动识别棋盘不准，可以手动传四个棋盘角点：
 
@@ -108,7 +111,8 @@ python3 scripts/next_move.py /path/to/board.jpg \
 python3 scripts/next_move.py board_ascii.txt \
   --input ascii \
   --side-to-move black \
-  --level beginner
+  --level beginner \
+  --result-image /tmp/go-next-result.jpg
 ```
 
 也可以从 stdin 输入：
@@ -139,6 +143,7 @@ cat board_ascii.txt | python3 scripts/next_move.py \
 - `root_info`：KataGo 根节点评估
 - `board_ascii`：实际送入 KataGo 的棋盘
 - `recognition`：图片识别元数据，仅图片输入时存在
+- `result_image`：带推荐落点标记的结果图路径，仅传入 `--result-image` 时存在
 
 输出形状示例：
 

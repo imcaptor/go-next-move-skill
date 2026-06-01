@@ -57,8 +57,11 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --side-to-move black \
   --level intermediate \
   --visits 400 \
-  --overlay /tmp/go-next-overlay.jpg
+  --overlay /tmp/go-next-overlay.jpg \
+  --result-image /tmp/go-next-result.jpg
 ```
+
+Use `--result-image` when interacting with a user. It renders the recognized `board_ascii` as a clean board and marks the recommended move with a red ring/dot. This makes the answer easier to understand and lets the user compare the recognized board against the real board.
 
 For an already recognized board:
 
@@ -82,6 +85,7 @@ The script returns JSON containing:
 - `recommendations_by_level`
 - `candidate_moves`
 - `root_info`
+- optional `result_image` when `--result-image` is passed
 - optional `recognition` metadata when input is an image
 
 ## Playing-Strength Levels

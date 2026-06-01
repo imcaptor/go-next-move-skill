@@ -46,8 +46,11 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --side-to-move black \
   --level intermediate \
   --visits 400 \
-  --overlay /tmp/go-next-overlay.jpg
+  --overlay /tmp/go-next-overlay.jpg \
+  --result-image /tmp/go-next-result.jpg
 ```
+
+`--overlay` marks recognized black and white stones on the warped image for checking recognition accuracy. `--result-image` writes a clean board image with the recommended move marked by a red ring / dot, which is friendlier to show to users.
 
 If board detection needs help, pass four board corners:
 
@@ -102,7 +105,8 @@ Run:
 python3 scripts/next_move.py board_ascii.txt \
   --input ascii \
   --side-to-move black \
-  --level beginner
+  --level beginner \
+  --result-image /tmp/go-next-result.jpg
 ```
 
 Or from stdin:
@@ -133,6 +137,7 @@ The script prints JSON. Important fields:
 - `root_info`: KataGo root evaluation
 - `board_ascii`: the position that was analyzed
 - `recognition`: image recognition metadata, present only for image input
+- `result_image`: path to the generated recommendation image, present only when `--result-image` is passed
 
 Example shape:
 

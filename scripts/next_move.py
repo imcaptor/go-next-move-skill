@@ -9,6 +9,15 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+try:
+    import cv2
+    import numpy as np
+except ImportError as exc:
+    raise SystemExit(
+        "Missing dependency. Install with: "
+        "python3 -m pip install -r scripts/requirements.txt"
+    ) from exc
+
 from go_board_recognition import recognize_board, render_overlay, write_image
 
 
@@ -47,6 +56,25 @@ def gtp_coord(row: int, col: int, board_size: int) -> str:
     return f"{GTP_COLUMNS[col]}{board_size - row}"
 
 
+def parse_gtp_coord(move: str, board_size: int) -> tuple[int, int] | None:
+    value = move.strip().upper()
+    if value in {"PASS", "RESIGN"}:
+        return None
+    if len(value) < 2:
+        raise SystemExit(f"Bad GTP move: {move}")
+    col = GTP_COLUMNS.find(value[0])
+    if col < 0 or col >= board_size:
+        raise SystemExit(f"Bad GTP move column: {move}")
+    try:
+        number = int(value[1:])
+    except ValueError as exc:
+        raise SystemExit(f"Bad GTP move row: {move}") from exc
+    row = board_size - number
+    if not 0 <= row < board_size:
+        raise SystemExit(f"Bad GTP move row: {move}")
+    return row, col
+
+
 def parse_board_ascii(text: str) -> list[str]:
     rows = []
     for line in text.splitlines():
@@ -80,6 +108,93 @@ def board_ascii_to_initial_stones(rows: list[str]) -> list[list[str]]:
             elif value in {"O", "o", "W", "w"}:
                 stones.append(["W", gtp_coord(row_idx, col_idx, size)])
     return stones
+
+
+def blend_circle(image: np.ndarray, center: tuple[int, int], radius: int, color: tuple[int, int, int], alpha: float) -> None:
+    layer = image.copy()
+    cv2.circle(layer, center, radius, color, -1, lineType=cv2.LINE_AA)
+    cv2.addWeighted(layer, alpha, image, 1.0 - alpha, 0, image)
+
+
+def draw_stone(image: np.ndarray, center: tuple[int, int], radius: int, color: str) -> None:
+    x, y = center
+    blend_circle(image, (x + max(1, radius // 10), y + max(1, radius // 10)), radius, (70, 92, 118), 0.18)
+    if color in {"X", "x", "B", "b"}:
+        cv2.circle(image, center, radius, (22, 22, 24), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, (x - radius // 4, y - radius // 4), max(2, radius // 4), (58, 58, 62), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, center, radius, (5, 5, 7), 2, lineType=cv2.LINE_AA)
+    else:
+        cv2.circle(image, center, radius, (236, 232, 218), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, (x - radius // 4, y - radius // 4), max(3, radius // 3), (255, 252, 244), -1, lineType=cv2.LINE_AA)
+        cv2.circle(image, center, radius, (168, 162, 148), 1, lineType=cv2.LINE_AA)
+
+
+def draw_recommendation_marker(
+    image: np.ndarray,
+    center: tuple[int, int],
+    stone_radius: int,
+    side_to_move: str,
+    occupied: bool,
+) -> None:
+    if not occupied:
+        draw_stone(image, center, stone_radius, "X" if side_to_move == "B" else "O")
+    marker_radius = max(7, int(stone_radius * 0.34))
+    ring_radius = max(marker_radius + 6, int(stone_radius * 0.62))
+    cv2.circle(image, center, ring_radius, (0, 0, 235), 4, lineType=cv2.LINE_AA)
+    cv2.circle(image, center, marker_radius, (0, 0, 255), -1, lineType=cv2.LINE_AA)
+    cv2.circle(image, center, max(2, marker_radius // 3), (245, 245, 245), -1, lineType=cv2.LINE_AA)
+
+
+def render_recommendation_board(
+    rows: list[str],
+    recommendation: dict[str, Any] | None,
+    side_to_move: str,
+    output_size: int,
+) -> np.ndarray:
+    board_size = len(rows)
+    image = np.full((output_size, output_size, 3), (94, 166, 214), dtype=np.uint8)
+    y = np.arange(output_size, dtype=np.float32)[:, None]
+    x = np.arange(output_size, dtype=np.float32)[None, :]
+    grain = 5.0 * np.sin(x / 6.0) + 3.0 * np.sin(x / 19.0) + 1.5 * np.sin((x + y) / 31.0)
+    image = np.clip(image.astype(np.float32) + grain[..., None], 0, 255).astype(np.uint8)
+
+    pad = int(round(output_size * 0.06))
+    cell = (output_size - 2 * pad) / float(board_size - 1)
+    line_color = (38, 43, 52)
+    border_color = (53, 72, 102)
+    cv2.rectangle(image, (8, 8), (output_size - 9, output_size - 9), border_color, max(4, output_size // 210), lineType=cv2.LINE_AA)
+    for idx in range(board_size):
+        pos = int(round(pad + idx * cell))
+        thickness = 2 if idx in {0, board_size - 1} else 1
+        cv2.line(image, (pad, pos), (output_size - pad, pos), line_color, thickness, lineType=cv2.LINE_AA)
+        cv2.line(image, (pos, pad), (pos, output_size - pad), line_color, thickness, lineType=cv2.LINE_AA)
+
+    if board_size == 19:
+        star_radius = max(3, int(round(cell * 0.06)))
+        for row in (3, 9, 15):
+            for col in (3, 9, 15):
+                center = (int(round(pad + col * cell)), int(round(pad + row * cell)))
+                cv2.circle(image, center, star_radius, (13, 18, 25), -1, lineType=cv2.LINE_AA)
+
+    stone_radius = max(8, int(round(cell * 0.43)))
+    for row_idx, row in enumerate(rows):
+        for col_idx, value in enumerate(row):
+            if value not in {"X", "x", "B", "b", "O", "o", "W", "w"}:
+                continue
+            center = (int(round(pad + col_idx * cell)), int(round(pad + row_idx * cell)))
+            draw_stone(image, center, stone_radius, value)
+
+    move = recommendation.get("move") if recommendation else None
+    if move:
+        parsed = parse_gtp_coord(str(move), board_size)
+        if parsed is None:
+            cv2.putText(image, "PASS", (pad, output_size - pad // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 220), 3, lineType=cv2.LINE_AA)
+        else:
+            row_idx, col_idx = parsed
+            center = (int(round(pad + col_idx * cell)), int(round(pad + row_idx * cell)))
+            occupied = rows[row_idx][col_idx] != "."
+            draw_recommendation_marker(image, center, stone_radius, side_to_move, occupied)
+    return image
 
 
 def load_board_source(args: argparse.Namespace) -> tuple[list[str], dict[str, Any] | None]:
@@ -379,6 +494,10 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     }
     if recognition is not None:
         result["recognition"] = recognition
+    if args.result_image:
+        result_image = render_recommendation_board(rows, selected, side_to_move, args.result_size)
+        write_image(args.result_image, result_image)
+        result["result_image"] = str(args.result_image)
     return result
 
 
@@ -396,6 +515,8 @@ def main() -> int:
     parser.add_argument("--corners", help="Manual image board corners as 'x,y x,y x,y x,y'")
     parser.add_argument("--grid-corners", action="store_true", help="Treat --corners as outer grid intersections")
     parser.add_argument("--overlay", type=Path, help="Write a recognition overlay when input is an image")
+    parser.add_argument("--result-image", type=Path, help="Write a clean board image with the recommended move marked")
+    parser.add_argument("--result-size", type=int, default=1200, help="Pixel size for --result-image, default: 1200")
     parser.add_argument("--katago", default="katago", help="Path to katago executable")
     parser.add_argument("--model", default=DEFAULT_MODEL, help="KataGo model path")
     parser.add_argument("--analysis-config", default=DEFAULT_ANALYSIS_CONFIG, help="KataGo analysis config path")
@@ -406,6 +527,8 @@ def main() -> int:
         raise SystemExit("--visits must be at least 1")
     if args.top_candidates < 1:
         raise SystemExit("--top-candidates must be at least 1")
+    if args.result_size < 320:
+        raise SystemExit("--result-size must be at least 320")
     print(json.dumps(build_result(args), ensure_ascii=False, indent=2))
     return 0
 
