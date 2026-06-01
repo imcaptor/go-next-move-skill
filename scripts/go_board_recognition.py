@@ -302,9 +302,14 @@ def classify_intersections(warped: np.ndarray, xfit: GridFit, yfit: GridFit, boa
             y0 = max(0, int(round(y - radius)))
             y1 = min(size, int(round(y + radius + 1)))
             yy, xx = np.ogrid[y0:y1, x0:x1]
-            circle = (xx - x) ** 2 + (yy - y) ** 2 <= radius**2
-            patch_gray = gray[y0:y1, x0:x1][circle]
-            patch_hsv = hsv[y0:y1, x0:x1][circle]
+            distance2 = (xx - x) ** 2 + (yy - y) ** 2
+            circle = distance2 <= radius**2
+            center = distance2 <= (radius * 0.45) ** 2
+            ring = (distance2 >= (radius * 0.58) ** 2) & circle
+            patch_gray_full = gray[y0:y1, x0:x1]
+            patch_hsv_full = hsv[y0:y1, x0:x1]
+            patch_gray = patch_gray_full[circle]
+            patch_hsv = patch_hsv_full[circle]
             if patch_gray.size == 0:
                 cells.append(".")
                 continue
@@ -316,10 +321,25 @@ def classify_intersections(warped: np.ndarray, xfit: GridFit, yfit: GridFit, boa
             bright_fraction = float((patch_gray > 165).mean())
             bright_low_sat = float(((patch_hsv[:, 2] > 170) & (patch_hsv[:, 1] < 70)).mean())
             white_core = float(((patch_hsv[:, 2] > 185) & (patch_hsv[:, 1] < 65)).mean())
+            center_hsv = patch_hsv_full[center]
+            ring_hsv = patch_hsv_full[ring]
+            if center_hsv.size and ring_hsv.size:
+                center_low_sat = float((center_hsv[:, 1] < 65).mean())
+                edge_contrast = float(center_hsv[:, 2].mean() - ring_hsv[:, 2].mean())
+            else:
+                center_low_sat = 0.0
+                edge_contrast = 0.0
+            white_shape_ok = center_low_sat > 0.70 and edge_contrast > -2.0
 
             if dark_fraction > 0.30 or (mean_v < 108 and very_dark_fraction > 0.10):
                 cells.append("B")
-            elif (bright_low_sat > 0.48 and mean_s < 74) or (white_core > 0.36 and mean_s < 78 and bright_fraction > 0.60):
+            elif (
+                white_shape_ok
+                and (
+                    (bright_low_sat > 0.48 and mean_s < 55)
+                    or (white_core > 0.36 and mean_s < 78 and bright_fraction > 0.60)
+                )
+            ):
                 cells.append("W")
             else:
                 cells.append(".")

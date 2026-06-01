@@ -126,3 +126,4 @@ Do not invent tactical explanations that are not supported by KataGo data or vis
 - Use KataGo for candidate moves; use the requested level to choose the playing strength of the move.
 - A board photo usually does not prove whose turn it is. Ask or require the side to move unless the surrounding context makes it clear.
 - If board recognition is uncertain, surface the uncertainty before giving a move recommendation.
+- White-stone classification includes center low-saturation and center/ring contrast checks to reduce false positives from glare or bright wood grain.

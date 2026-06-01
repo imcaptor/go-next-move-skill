@@ -180,4 +180,5 @@ python3 scripts/go_board_recognition.py /path/to/board.jpg \
 
 - A board image usually does not prove whose turn it is, so `--side-to-move` is required.
 - Image recognition can be wrong on blurry, skewed, cropped, or heavily annotated boards. Check the overlay when accuracy matters.
+- White-stone recognition checks more than brightness: it also requires low-saturation center evidence and center/ring contrast to reduce false positives from bright wood grain or glare.
 - For high-strength play, use `--level advanced` with a larger `--visits` value.

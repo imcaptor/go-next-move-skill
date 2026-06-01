@@ -186,4 +186,5 @@ python3 scripts/go_board_recognition.py /path/to/board.jpg \
 
 - 单张棋盘图片通常无法判断轮到谁下，所以必须传 `--side-to-move`。
 - 图片模糊、倾斜、裁切、有覆盖标记时，识别可能出错。重要局面建议检查 `--overlay` 输出。
+- 白棋识别不只看亮度，还会检查中心低饱和和中心/外环对比，以减少亮木纹或反光空点被误判成白子的情况。
 - 如果想要最强推荐，用 `--level advanced`，并适当增大 `--visits`。
