@@ -145,17 +145,17 @@ def draw_recommendation_marker(
     cv2.circle(image, center, max(2, marker_radius // 3), (245, 245, 245), -1, lineType=cv2.LINE_AA)
 
 
-def draw_source_recommendation_marker(image: np.ndarray, center: tuple[int, int], side_to_move: str, occupied: bool) -> None:
+def draw_numbered_source_marker(image: np.ndarray, center: tuple[int, int], label: str = "1") -> None:
     height, width = image.shape[:2]
-    radius = max(16, int(round(min(height, width) / 36)))
-    if not occupied:
-        color = (245, 245, 245) if side_to_move == "W" else (22, 22, 24)
-        outline = (40, 40, 40) if side_to_move == "W" else (230, 230, 230)
-        cv2.circle(image, center, radius, color, -1, lineType=cv2.LINE_AA)
-        cv2.circle(image, center, radius, outline, 2, lineType=cv2.LINE_AA)
-    cv2.circle(image, center, max(radius + 7, int(radius * 1.28)), (0, 0, 255), 5, lineType=cv2.LINE_AA)
-    cv2.circle(image, center, max(7, radius // 3), (0, 0, 255), -1, lineType=cv2.LINE_AA)
-    cv2.circle(image, center, max(3, radius // 8), (255, 255, 255), -1, lineType=cv2.LINE_AA)
+    radius = max(18, int(round(min(height, width) / 42)))
+    cv2.circle(image, center, radius + 7, (255, 255, 255), -1, lineType=cv2.LINE_AA)
+    cv2.circle(image, center, radius + 7, (0, 0, 255), 4, lineType=cv2.LINE_AA)
+    cv2.circle(image, center, radius, (0, 0, 255), -1, lineType=cv2.LINE_AA)
+    font_scale = max(0.78, radius / 24.0)
+    thickness = max(2, int(round(radius / 10)))
+    (text_w, text_h), baseline = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+    origin = (center[0] - text_w // 2, center[1] + (text_h - baseline) // 2)
+    cv2.putText(image, label, origin, cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness, lineType=cv2.LINE_AA)
 
 
 def render_source_recommendation_image(
@@ -168,9 +168,8 @@ def render_source_recommendation_image(
     yfit: GridFit,
     warp_size: int,
 ) -> np.ndarray:
-    overlay = image.copy()
-    source_corners = np.array(corners, dtype=np.float32)
-    cv2.polylines(overlay, [source_corners.astype(np.int32).reshape((-1, 1, 2))], True, (0, 0, 255), 3, lineType=cv2.LINE_AA)
+    board = [["B" if value in {"X", "x", "B", "b"} else "W" if value in {"O", "o", "W", "w"} else "." for value in row] for row in rows]
+    overlay = render_source_overlay(image, corners, board, xfit, yfit, warp_size)
     move = recommendation.get("move") if recommendation else None
     if not move:
         return overlay
@@ -181,8 +180,7 @@ def render_source_recommendation_image(
     row, col = parsed
     point = grid_to_source_point(row, col, corners, xfit, yfit, warp_size)
     center = (int(round(float(point[0]))), int(round(float(point[1]))))
-    occupied = rows[row][col] != "."
-    draw_source_recommendation_marker(overlay, center, side_to_move, occupied)
+    draw_numbered_source_marker(overlay, center, "1")
     return overlay
 
 

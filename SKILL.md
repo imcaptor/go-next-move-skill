@@ -67,7 +67,7 @@ Use `--result-image` when interacting with a user. It renders the recognized `bo
 
 Use `--source-overlay` for user-facing recognition verification. It marks detected stones on the original photo. `--overlay` is a warped/cropped board view for debugging and may not look like the original photo.
 
-Prefer `--source-result-image` for the final user-facing image when the input is a photo. It overlays the recommended move directly on the original photo, which makes recognition mistakes easier to spot.
+Prefer `--source-result-image` for the final user-facing image when the input is a photo. It is the combined verification/result image: existing recognized stones are marked with B/W labels and the recommended move is marked with the numbered label `1`. This makes recognition mistakes easier to spot and leaves room for future multi-step labels.
 
 For an already recognized board:
 
