@@ -52,7 +52,7 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --result-image /tmp/go-next-result.jpg
 ```
 
-`--source-overlay` marks detected stones and board corners on the original photo, which is the best user-facing recognition check. `--source-result-image` is the combined final image: existing white stones are marked with black `W`, existing black stones are marked with white `B`, and the recommended move is drawn as a new stone with the numbered label `1`. `--overlay` writes a warped/cropped board view for debugging. `--result-image` writes a clean board image with the recommended move marked by a red ring / dot.
+`--source-overlay` marks detected stones and board corners on the original photo, which is the best user-facing recognition check. For photo input, the tool also generates a combined original-photo result by default: existing white stones are marked with black `W`, existing black stones are marked with white `B`, and the recommended move is drawn as a new stone with the numbered label `1`. If you also want a clean board image, pass `--result-image` explicitly. `--overlay` writes a warped/cropped board view for debugging.
 
 If board detection needs help, pass four board corners:
 
@@ -140,8 +140,8 @@ The script prints JSON. Important fields:
 - `root_info`: KataGo root evaluation
 - `board_ascii`: the position that was analyzed
 - `recognition`: image recognition metadata, present only for image input
-- `result_image`: path to the generated recommendation image, present only when `--result-image` is passed
-- `source_result_image`: path to the combined original-photo image, with existing stones marked by B/W text and the recommended move drawn as a numbered stone
+- `result_image`: path to the generated recommendation image, present only when you explicitly pass `--result-image`
+- `source_result_image`: default combined original-photo image path for photo input, with existing stones marked by B/W text and the recommended move drawn as a numbered stone
 - `recognition.source_overlay`: path to the source-photo recognition check, present only when `--source-overlay` is passed
 
 Example shape:

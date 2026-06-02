@@ -63,11 +63,11 @@ python3 scripts/next_move.py /path/to/board.jpg \
   --result-image /tmp/go-next-result.jpg
 ```
 
-Use `--result-image` when interacting with a user. It renders the recognized `board_ascii` as a clean board and marks the recommended move with a red ring/dot. This makes the answer easier to understand and lets the user compare the recognized board against the real board.
+For photo input, the default user-facing image should be the combined original-photo result. It marks existing white stones with black `W`, existing black stones with white `B`, and the recommended move as a numbered stone so the user can compare the recognition against the real board at a glance. Use `--result-image` only when you explicitly want the clean warped-board rendering with a red ring/dot.
 
 Use `--source-overlay` for user-facing recognition verification. It marks detected stones on the original photo. `--overlay` is a warped/cropped board view for debugging and may not look like the original photo.
 
-Prefer `--source-result-image` for the final user-facing image when the input is a photo. It is the combined verification/result image: existing white stones are marked with black `W`, existing black stones are marked with white `B`, and the recommended move is drawn as a new stone with the numbered label `1`. This makes recognition mistakes easier to spot and leaves room for future multi-step labels.
+For photo input, the tool should surface the combined original-photo result by default. It is the verification/result image: existing white stones are marked with black `W`, existing black stones are marked with white `B`, and the recommended move is drawn as a new stone with the numbered label `1`. This makes recognition mistakes easier to spot and leaves room for future multi-step labels. Use `--result-image` only when you explicitly want the clean warped-board rendering.
 
 For an already recognized board:
 
@@ -93,7 +93,7 @@ The script returns JSON containing:
 - `candidate_moves`
 - `root_info`
 - optional `result_image` when `--result-image` is passed
-- optional `source_result_image` when `--source-result-image` is passed
+- default `source_result_image` for photo input, or optional `source_result_image` when `--source-result-image` is passed explicitly
 - optional `recognition` metadata when input is an image
 
 ## Playing-Strength Levels

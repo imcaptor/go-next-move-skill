@@ -6,6 +6,7 @@ import json
 import subprocess
 import sys
 import uuid
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -191,6 +192,10 @@ def render_source_recommendation_image(
     center = (int(round(float(point[0]))), int(round(float(point[1]))))
     draw_numbered_source_stone(overlay, center, side_to_move, "1")
     return overlay
+
+
+def default_source_result_path() -> Path:
+    return Path(tempfile.gettempdir()) / f"go-next-move-source-result-{uuid.uuid4().hex}.jpg"
 
 
 def render_recommendation_board(
@@ -660,7 +665,10 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         result_image = render_recommendation_board(rows, selected, side_to_move, args.result_size)
         write_image(args.result_image, result_image)
         result["result_image"] = str(args.result_image)
-    if args.source_result_image:
+    source_result_path = args.source_result_image
+    if recognition is not None and image_context is not None and source_result_path is None:
+        source_result_path = default_source_result_path()
+    if source_result_path:
         if recognition is None or image_context is None:
             raise SystemExit("--source-result-image requires image input")
         source_result = render_source_recommendation_image(
@@ -673,8 +681,10 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             image_context["yfit"],
             args.warp_size,
         )
-        write_image(args.source_result_image, source_result)
-        result["source_result_image"] = str(args.source_result_image)
+        write_image(source_result_path, source_result)
+        result["source_result_image"] = str(source_result_path)
+        if args.result_image is None:
+            result["result_image"] = str(source_result_path)
     return result
 
 
