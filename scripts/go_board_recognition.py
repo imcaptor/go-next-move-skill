@@ -330,6 +330,14 @@ def classify_intersections(warped: np.ndarray, xfit: GridFit, yfit: GridFit, boa
                 center_low_sat = 0.0
                 edge_contrast = 0.0
             white_shape_ok = center_low_sat > 0.70 and edge_contrast > -2.0
+            edge_white_shape_ok = (
+                center_low_sat > 0.80
+                and edge_contrast > 12.0
+                and white_core > 0.50
+                and bright_low_sat > 0.50
+                and bright_fraction > 0.50
+                and mean_s < 92
+            )
 
             if dark_fraction > 0.30 or (mean_v < 108 and very_dark_fraction > 0.10):
                 cells.append("B")
@@ -338,6 +346,7 @@ def classify_intersections(warped: np.ndarray, xfit: GridFit, yfit: GridFit, boa
                 and (
                     (bright_low_sat > 0.48 and mean_s < 55)
                     or (white_core > 0.36 and mean_s < 78 and bright_fraction > 0.60)
+                    or edge_white_shape_ok
                 )
             ):
                 cells.append("W")
