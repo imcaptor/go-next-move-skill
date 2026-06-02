@@ -140,7 +140,10 @@ cat board_ascii.txt | python3 scripts/next_move.py \
 脚本输出 JSON。重要字段：
 
 - `recommendation`：按 `--level` 选出的推荐手
-- `reason`：推荐原因，包含选择依据、主变化、候选手对比和识别风险提示
+- `reason.summary`：一句话推荐结论
+- `reason.explanation`：为什么这么走，包含强度选择、搜索访问数、胜率/目差、主变化和候选手取舍
+- `reason.technical_parameters`：技术参数，包含根节点评估、推荐手评估、搜索第一候选、胜率、目差、访问数、prior、LCB、PV 等
+- `reason.comparison_candidates`：前几个替代候选手，以及相对推荐手/搜索第一候选的损失
 - `recommendations_by_level`：初级、中级、高级三档推荐
 - `candidate_moves`：KataGo 候选手，包含 visits、winrate、score lead 和 PV
 - `root_info`：KataGo 根节点评估
@@ -163,7 +166,22 @@ cat board_ascii.txt | python3 scripts/next_move.py \
   },
   "reason": {
     "summary": "建议白棋走 Q4。这是按中级强度选择的近似最优候选手。主变化参考：Q4 -> D16 -> C17。",
-    "main_variation": ["Q4", "D16", "C17"]
+    "explanation": [
+      "选择依据：中级强度：优先选择接近最优、但不一定是第一推荐的稳健候选手。",
+      "局面评估：胜率 54.2%，预估目差 +1.6。"
+    ],
+    "main_variation": ["Q4", "D16", "C17"],
+    "technical_parameters": {
+      "engine": "KataGo",
+      "rules": "Chinese",
+      "recommended_move": {
+        "move": "Q4",
+        "visits": 138,
+        "winrate_percent": "54.2%",
+        "score_lead_points": "+1.6",
+        "score_loss_vs_best": 0.8
+      }
+    }
   },
   "recommendations_by_level": {
     "beginner": {},

@@ -114,9 +114,13 @@ When answering a user, include:
 
 1. The recommended coordinate.
 2. The generated `source_result_image` for photo input, or `result_image` for ASCII input.
-3. A concise reason based on `reason.summary`, `reason.main_variation`, and candidate comparisons.
-4. The `recognition.source_overlay` image when available.
-5. A recognition caveat if the rendered board or source overlay does not match the real photo.
+3. Why this move was chosen, using `reason.summary` plus the bullet-like items in `reason.explanation`.
+4. Technical parameters from `reason.technical_parameters`, especially winrate, score lead, visits, score loss vs best, and PV.
+5. Candidate comparison from `reason.comparison_candidates` when there are meaningful alternatives.
+6. The `recognition.source_overlay` image when available.
+7. A recognition caveat if the rendered board or source overlay does not match the real photo.
+
+Do not only return the coordinate. The user-facing answer should always include enough engine data to audit the recommendation: winrate, score lead, visits, and whether the chosen move is the top KataGo move or a deliberately softer level-based move.
 
 Do not invent tactical explanations that are not supported by KataGo data or visible board context. If recognition looks wrong, say the recommendation is not reliable until the board is corrected.
 

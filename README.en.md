@@ -134,7 +134,10 @@ The current selection policy uses candidate rank plus score and winrate loss fro
 The script prints JSON. Important fields:
 
 - `recommendation`: the move selected for `--level`
-- `reason`: recommendation rationale, including selection basis, main variation, candidate comparison, and recognition caveats
+- `reason.summary`: one-sentence recommendation
+- `reason.explanation`: why this move was selected, including level policy, visits, winrate/score lead, main line, and tradeoffs
+- `reason.technical_parameters`: engine parameters and evaluations, including root evaluation, selected move, top search move, winrate, score lead, visits, prior, LCB, and PV
+- `reason.comparison_candidates`: nearby alternatives and their loss vs the recommendation or top search move
 - `recommendations_by_level`: beginner, intermediate, and advanced choices
 - `candidate_moves`: KataGo candidates with visits, winrate, score lead, and PV
 - `root_info`: KataGo root evaluation
@@ -157,7 +160,22 @@ Example shape:
   },
   "reason": {
     "summary": "Recommended move for white: Q4. This is a near-best candidate selected for intermediate strength. Main line: Q4 -> D16 -> C17.",
-    "main_variation": ["Q4", "D16", "C17"]
+    "explanation": [
+      "Selection basis: intermediate strength chooses a solid near-top candidate, not always the best move.",
+      "Position evaluation: winrate 54.2%, score lead +1.6."
+    ],
+    "main_variation": ["Q4", "D16", "C17"],
+    "technical_parameters": {
+      "engine": "KataGo",
+      "rules": "Chinese",
+      "recommended_move": {
+        "move": "Q4",
+        "visits": 138,
+        "winrate_percent": "54.2%",
+        "score_lead_points": "+1.6",
+        "score_loss_vs_best": 0.8
+      }
+    }
   },
   "recommendations_by_level": {
     "beginner": {},

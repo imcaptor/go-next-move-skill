@@ -424,8 +424,65 @@ def points(value: Any) -> str | None:
     return f"{float(value):+.1f}"
 
 
+def rounded_float(value: Any, digits: int = 4) -> float | None:
+    if value is None:
+        return None
+    try:
+        return round(float(value), digits)
+    except (TypeError, ValueError):
+        return None
+
+
 def side_name(side_to_move: str) -> str:
     return "白棋" if side_to_move == "W" else "黑棋"
+
+
+def candidate_snapshot(
+    candidate: dict[str, Any],
+    best: dict[str, Any] | None = None,
+    recommendation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    item = {
+        "move": candidate.get("move"),
+        "order": candidate.get("order"),
+        "visits": candidate.get("visits"),
+        "winrate": rounded_float(candidate.get("winrate")),
+        "winrate_percent": percent(candidate.get("winrate")),
+        "scoreLead": rounded_float(candidate.get("scoreLead"), 3),
+        "score_lead_points": points(candidate.get("scoreLead")),
+        "scoreStdev": rounded_float(candidate.get("scoreStdev"), 3),
+        "prior": rounded_float(candidate.get("prior")),
+        "lcb": rounded_float(candidate.get("lcb")),
+        "utility": rounded_float(candidate.get("utility")),
+        "pv": candidate.get("pv", []),
+    }
+    if best is not None:
+        loss = score_loss(best, candidate)
+        wr_loss = winrate_loss(best, candidate)
+        if loss is not None:
+            item["score_loss_vs_best"] = round(loss, 3)
+        if wr_loss is not None:
+            item["winrate_loss_vs_best"] = round(wr_loss, 4)
+            item["winrate_loss_vs_best_percent"] = percent(wr_loss)
+    if recommendation is not None and candidate.get("move") != recommendation.get("move"):
+        rec_score = score_loss(recommendation, candidate)
+        rec_wr = winrate_loss(recommendation, candidate)
+        if rec_score is not None:
+            item["score_loss_vs_recommendation"] = round(rec_score, 3)
+        if rec_wr is not None:
+            item["winrate_loss_vs_recommendation"] = round(rec_wr, 4)
+            item["winrate_loss_vs_recommendation_percent"] = percent(rec_wr)
+    return {key: value for key, value in item.items() if value is not None}
+
+
+def level_description(requested_level: str) -> str:
+    if requested_level == "advanced":
+        return "高级强度：直接采用 KataGo 当前搜索排序第一的候选手。"
+    if requested_level == "intermediate":
+        return "中级强度：优先选择接近最优、但不一定是第一推荐的稳健候选手。"
+    if requested_level == "beginner":
+        return "初级强度：选择仍可下、但相对最强手有一定损失的温和候选手。"
+    return "全部级别：`recommendation` 使用高级强度，三档结果见 `recommendations_by_level`。"
 
 
 def move_reason(
@@ -445,16 +502,13 @@ def move_reason(
     score_lead = points(recommendation.get("scoreLead"))
     pv = recommendation.get("pv", [])
     selection_reason = recommendation.get("selection_reason")
+    best = candidates[0] if candidates else recommendation
+    best_move = best.get("move")
+    score_loss_vs_best = score_loss(best, recommendation)
+    winrate_loss_vs_best = winrate_loss(best, recommendation)
 
     summary_parts = [f"建议{side_name(side_to_move)}走 {move}。"]
-    if requested_level == "advanced":
-        summary_parts.append("这是 KataGo 当前搜索排序第一的候选手。")
-    elif requested_level == "intermediate":
-        summary_parts.append("这是按中级强度选择的近似最优候选手。")
-    elif requested_level == "beginner":
-        summary_parts.append("这是按初级强度选择的较温和候选手。")
-    else:
-        summary_parts.append("当前 `recommendation` 默认使用高级强度。")
+    summary_parts.append(level_description(requested_level))
     if visits is not None:
         summary_parts.append(f"该手获得 {visits} 次访问。")
     if winrate is not None or score_lead is not None:
@@ -464,27 +518,48 @@ def move_reason(
         if score_lead is not None:
             eval_bits.append(f"目差 {score_lead}")
         summary_parts.append("KataGo 对该手的评估为：" + "，".join(eval_bits) + "。")
+    if best_move and best_move != move:
+        loss_bits = []
+        if score_loss_vs_best is not None:
+            loss_bits.append(f"相对搜索第一候选 {best_move} 的目差损失约 {score_loss_vs_best:.1f} 目")
+        if winrate_loss_vs_best is not None:
+            loss_bits.append(f"胜率差 {float(winrate_loss_vs_best) * 100:.1f} 个百分点")
+        if loss_bits:
+            summary_parts.append("强度取舍：" + "，".join(loss_bits) + "。")
     if pv:
         summary_parts.append("主变化参考：" + " -> ".join(str(item) for item in pv[:6]) + "。")
+
+    explanation = [
+        f"选择依据：{level_description(requested_level)}",
+    ]
+    if selection_reason:
+        explanation.append(f"分级策略说明：{selection_reason}")
+    if visits is not None:
+        explanation.append(f"搜索置信度：KataGo 在该候选手上投入了 {visits} 次访问，访问数越高通常表示引擎越重视这条变化。")
+    if winrate is not None or score_lead is not None:
+        eval_text = []
+        if winrate is not None:
+            eval_text.append(f"胜率 {winrate}")
+        if score_lead is not None:
+            eval_text.append(f"预估目差 {score_lead}")
+        explanation.append("局面评估：" + "，".join(eval_text) + "。")
+    if pv:
+        explanation.append("后续思路：主变化显示引擎预期双方可能按 " + " -> ".join(str(item) for item in pv[:6]) + " 展开。")
+    if best_move == move:
+        explanation.append("候选手对比：该手就是当前搜索排序第一的最强候选。")
+    elif best_move:
+        comparison_text = [f"搜索排序第一候选是 {best_move}"]
+        if score_loss_vs_best is not None:
+            comparison_text.append(f"本手相对它的目差损失约 {score_loss_vs_best:.1f} 目")
+        if winrate_loss_vs_best is not None:
+            comparison_text.append(f"胜率差 {float(winrate_loss_vs_best) * 100:.1f} 个百分点")
+        explanation.append("候选手对比：" + "，".join(comparison_text) + "。")
 
     comparisons = []
     for candidate in candidates[:5]:
         if candidate.get("move") == recommendation.get("move"):
             continue
-        item = {
-            "move": candidate.get("move"),
-            "order": candidate.get("order"),
-            "visits": candidate.get("visits"),
-            "winrate": candidate.get("winrate"),
-            "scoreLead": candidate.get("scoreLead"),
-        }
-        loss = score_loss(recommendation, candidate)
-        wr_loss = winrate_loss(recommendation, candidate)
-        if loss is not None:
-            item["score_loss_vs_recommendation"] = round(loss, 3)
-        if wr_loss is not None:
-            item["winrate_loss_vs_recommendation"] = round(wr_loss, 4)
-        comparisons.append(item)
+        comparisons.append(candidate_snapshot(candidate, best, recommendation))
 
     caveats = []
     if recognition is not None:
@@ -495,8 +570,24 @@ def move_reason(
 
     return {
         "summary": "".join(summary_parts),
+        "explanation": explanation,
         "selection_reason": selection_reason,
         "main_variation": pv,
+        "technical_parameters": {
+            "engine": "KataGo",
+            "rules": "Chinese",
+            "side_to_move": side_to_move,
+            "root": {
+                "visits": root_info.get("visits"),
+                "winrate": rounded_float(root_info.get("winrate")),
+                "winrate_percent": percent(root_info.get("winrate")),
+                "scoreLead": rounded_float(root_info.get("scoreLead"), 3),
+                "score_lead_points": points(root_info.get("scoreLead")),
+            },
+            "recommended_move": candidate_snapshot(recommendation, best),
+            "top_search_move": candidate_snapshot(best, best) if best else None,
+            "best_move": candidate_snapshot(best, best) if best else None,
+        },
         "root_evaluation": {
             "visits": root_info.get("visits"),
             "winrate": root_info.get("winrate"),
@@ -599,19 +690,19 @@ def recommendations_by_level(candidates: list[dict[str, Any]]) -> dict[str, dict
             best,
             beginner,
             "beginner",
-            "A playable but intentionally softer candidate, chosen below the top line to reduce playing strength.",
+            "选择一个仍可下、但低于顶部变化的候选手，用来降低落子强度。",
         ),
         "intermediate": annotate_strength(
             best,
             intermediate,
             "intermediate",
-            "A solid candidate near the top line, but not necessarily KataGo's strongest move.",
+            "选择接近顶部变化的稳健候选手，但不一定采用 KataGo 搜索排序第一手。",
         ),
         "advanced": annotate_strength(
             best,
             best,
             "advanced",
-            "KataGo's top candidate by search order.",
+            "采用 KataGo 当前搜索排序第一的候选手。",
         ),
     }
 
