@@ -16,6 +16,7 @@ The intended workflow is:
 3. Send the position to KataGo using Chinese rules and a fixed visit budget.
 4. Return a recommended move matched to the requested playing-strength level.
 5. Include candidate moves and enough analysis data to explain or audit the choice.
+6. For no-capture continuation, preserve the original recognized board and add numbered AI/user move overlays before asking for the next move.
 
 ## Local KataGo Defaults
 
@@ -69,6 +70,20 @@ Use `--source-overlay` for user-facing recognition verification. It marks detect
 
 For photo input, the tool should surface the combined original-photo result by default. It is the verification/result image: existing white stones are marked with black `W`, existing black stones are marked with white `B`, and the recommended move is drawn as a new stone with the numbered label `1`. This makes recognition mistakes easier to spot and leaves room for future multi-step labels. Use `--result-image` only when you explicitly want the clean warped-board rendering.
 
+For no-capture continuation, pass confirmed post-photo moves with repeatable `--move-overlay source:color:move:label` arguments:
+
+```bash
+python3 scripts/next_move.py /path/to/board.jpg \
+  --input image \
+  --side-to-move white \
+  --level intermediate \
+  --move-overlay ai:W:Q4:1 \
+  --move-overlay user:B:D16:2 \
+  --source-result-image /tmp/go-step-3.jpg
+```
+
+This preserves the original recognized board in `base_board_ascii`, stores confirmed post-photo moves in `move_overlays`, sends the composed board in `board_ascii` to KataGo, and draws all confirmed moves plus the new recommendation in `display_move_overlays`. Do not use this mode after captures; re-shoot/reset the board and analyze one move from the new photo.
+
 For an already recognized board:
 
 ```bash
@@ -87,6 +102,9 @@ python3 scripts/next_move.py /path/to/board_ascii.txt \
 The script returns JSON containing:
 
 - `board_ascii`
+- `base_board_ascii`
+- `move_overlays`
+- `display_move_overlays`
 - `recommendation`
 - `reason`
 - `recommendations_by_level`
@@ -129,5 +147,6 @@ Do not invent tactical explanations that are not supported by KataGo data or vis
 - Do not rely on the language model alone for high-strength move choice.
 - Use KataGo for candidate moves; use the requested level to choose the playing strength of the move.
 - A board photo usually does not prove whose turn it is. Ask or require the side to move unless the surrounding context makes it clear.
+- Use `--move-overlay` only for no-capture continuation. If there are captures, ko/state ambiguity, or an overlay point is occupied, ask the user to re-shoot/reset the board and analyze one move.
 - If board recognition is uncertain, surface the uncertainty before giving a move recommendation.
 - White-stone classification includes center low-saturation and center/ring contrast checks to reduce false positives from glare or bright wood grain.

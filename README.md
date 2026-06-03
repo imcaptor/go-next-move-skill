@@ -13,6 +13,7 @@
 - 使用本地 KataGo 进行下一手分析。
 - 输出 JSON，包含当前级别推荐手、三档级别推荐、候选手和根节点评估。
 - 可选生成识别校验图，方便人工检查棋子识别是否准确。
+- 支持在不重新拍照的情况下追加“AI 推荐”和“人工录入”的无提子落子历史，并在结果图上连续编号。
 
 ## 环境要求
 
@@ -59,6 +60,34 @@ python3 scripts/next_move.py /path/to/board.jpg \
 ```
 
 `--source-overlay` 会在原照片上标出识别到的棋子和棋盘边界，适合给用户检查识别是否正确。对照片输入来说，工具默认也会生成一张合并后的原图结果：已有白子用黑色 `W` 标记，已有黑子用白色 `B` 标记；新推荐落点会画出对应颜色的新棋子，并在新棋子上写序号 `1`。如果你还想要干净棋盘图，可以显式传 `--result-image`；`--overlay` 是透视矫正后的棋盘裁切图，主要用于调试。
+
+## 无提子连续推理
+
+如果拍照后没有发生提子，可以把后续已确认落子作为 overlay 追加进去。原始图片识别状态会保留在 `base_board_ascii`，追加落子保存在 `move_overlays`，实际送入 KataGo 的合成局面保存在 `board_ascii`。
+
+参数格式：
+
+```text
+--move-overlay source:color:move:label
+```
+
+- `source`：`ai` 或 `user`
+- `color`：`B` / `black` / `黑`，或 `W` / `white` / `白`
+- `move`：GTP 坐标，例如 `Q4`
+- `label`：图片上显示的手数序号
+
+示例：白棋第一手是 AI 推荐，黑棋第二手是人工录入，然后继续推白棋第三手：
+
+```bash
+python3 scripts/next_move.py /path/to/board.jpg \
+  --input image \
+  --side-to-move white \
+  --move-overlay ai:W:Q4:1 \
+  --move-overlay user:B:D16:2 \
+  --source-result-image /tmp/go-step-3.jpg
+```
+
+脚本会检查这些追加落点在合成过程中必须为空；如果目标点已有棋子，说明坐标、识别或局面状态不一致。发生提子时不要用追加历史，重新拍照重置棋盘，只推理一步。
 
 如果自动识别棋盘不准，可以手动传四个棋盘角点：
 
@@ -140,6 +169,9 @@ cat board_ascii.txt | python3 scripts/next_move.py \
 脚本输出 JSON。重要字段：
 
 - `recommendation`：按 `--level` 选出的推荐手
+- `base_board_ascii`：原始图片或文本输入识别出的棋盘，不包含拍照后的追加落子
+- `move_overlays`：已确认的拍照后落子历史，例如 AI 推荐和人工录入
+- `display_move_overlays`：用于结果图绘制的落子序号，包含已确认历史和本次新推荐
 - `reason.summary`：一句话推荐结论
 - `reason.explanation`：为什么这么走，包含强度选择、搜索访问数、胜率/目差、主变化和候选手取舍
 - `reason.technical_parameters`：技术参数，包含根节点评估、推荐手评估、搜索第一候选、胜率、目差、访问数、prior、LCB、PV 等
@@ -204,5 +236,6 @@ python3 scripts/go_board_recognition.py /path/to/board.jpg \
 
 - 单张棋盘图片通常无法判断轮到谁下，所以必须传 `--side-to-move`。
 - 图片模糊、倾斜、裁切、有覆盖标记时，识别可能出错。重要局面建议检查 `--overlay` 输出。
+- `--move-overlay` 只适合无提子连续推理；有提子、打劫或任何局面不一致时，重新拍照重置。
 - 白棋识别不只看亮度，还会检查中心低饱和和中心/外环对比，以减少亮木纹或反光空点被误判成白子的情况。
 - 如果想要最强推荐，用 `--level advanced`，并适当增大 `--visits`。

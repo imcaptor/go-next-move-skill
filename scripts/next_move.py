@@ -7,6 +7,7 @@ import subprocess
 import sys
 import uuid
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +41,25 @@ LEVEL_ALIASES = {
     "all": "all",
     "全部": "all",
 }
+OVERLAY_SOURCE_ALIASES = {
+    "ai": "ai",
+    "assistant": "ai",
+    "推荐": "ai",
+    "ai推荐": "ai",
+    "user": "user",
+    "human": "user",
+    "manual": "user",
+    "人工": "user",
+    "手动": "user",
+}
+
+
+@dataclass(frozen=True)
+class MoveOverlay:
+    source: str
+    color: str
+    move: str
+    label: int
 
 
 def normalize_player(raw: str) -> str:
@@ -49,6 +69,13 @@ def normalize_player(raw: str) -> str:
     if value in {"w", "white", "白", "白棋"}:
         return "W"
     raise SystemExit("--side-to-move must be black/B/黑 or white/W/白")
+
+
+def normalize_overlay_source(raw: str) -> str:
+    value = raw.strip().lower()
+    if value in OVERLAY_SOURCE_ALIASES:
+        return OVERLAY_SOURCE_ALIASES[value]
+    raise SystemExit("Move overlay source must be ai/recommendation/推荐 or user/human/manual/人工")
 
 
 def gtp_coord(row: int, col: int, board_size: int) -> str:
@@ -74,6 +101,78 @@ def parse_gtp_coord(move: str, board_size: int) -> tuple[int, int] | None:
     if not 0 <= row < board_size:
         raise SystemExit(f"Bad GTP move row: {move}")
     return row, col
+
+
+def parse_move_overlay(raw: str, board_size: int) -> MoveOverlay:
+    parts = [part.strip() for part in raw.replace(",", ":").split(":")]
+    if len(parts) != 4 or any(not part for part in parts):
+        raise SystemExit(
+            "--move-overlay must use source:color:move:label, "
+            "for example ai:W:Q4:1 or user:B:D16:2"
+        )
+    source = normalize_overlay_source(parts[0])
+    color = normalize_player(parts[1])
+    move = parts[2].upper()
+    if parse_gtp_coord(move, board_size) is None:
+        raise SystemExit("--move-overlay does not support PASS/RESIGN because it must draw and compose a board point")
+    try:
+        label = int(parts[3])
+    except ValueError as exc:
+        raise SystemExit("--move-overlay label must be an integer") from exc
+    if label < 1:
+        raise SystemExit("--move-overlay label must be at least 1")
+    return MoveOverlay(source=source, color=color, move=move, label=label)
+
+
+def overlay_to_json(overlay: MoveOverlay) -> dict[str, Any]:
+    return {
+        "source": overlay.source,
+        "color": overlay.color,
+        "move": overlay.move,
+        "label": overlay.label,
+    }
+
+
+def recommendation_overlay(
+    recommendation: dict[str, Any] | None,
+    side_to_move: str,
+    label: int,
+    board_size: int,
+) -> MoveOverlay | None:
+    move = recommendation.get("move") if recommendation else None
+    if not move:
+        return None
+    if parse_gtp_coord(str(move), board_size) is None:
+        return None
+    return MoveOverlay(source="ai", color=side_to_move, move=str(move).upper(), label=label)
+
+
+def next_overlay_label(overlays: list[MoveOverlay]) -> int:
+    if not overlays:
+        return 1
+    return max(overlay.label for overlay in overlays) + 1
+
+
+def apply_move_overlays(rows: list[str], overlays: list[MoveOverlay]) -> list[str]:
+    board = [list(row) for row in rows]
+    board_size = len(rows)
+    seen_labels: set[int] = set()
+    for overlay in overlays:
+        if overlay.label in seen_labels:
+            raise SystemExit(f"Duplicate move overlay label: {overlay.label}")
+        seen_labels.add(overlay.label)
+        parsed = parse_gtp_coord(overlay.move, board_size)
+        if parsed is None:
+            raise SystemExit(f"Move overlay cannot be PASS/RESIGN: {overlay.move}")
+        row, col = parsed
+        current = board[row][col]
+        if current != ".":
+            raise SystemExit(
+                f"Move overlay {overlay.label} ({overlay.source}:{overlay.color}:{overlay.move}) "
+                f"targets an occupied point. Re-shoot/reset the board if captures or recognition drift occurred."
+            )
+        board[row][col] = "X" if overlay.color == "B" else "O"
+    return ["".join(row) for row in board]
 
 
 def parse_board_ascii(text: str) -> list[str]:
@@ -171,8 +270,7 @@ def draw_numbered_source_stone(image: np.ndarray, center: tuple[int, int], side_
 def render_source_recommendation_image(
     image: np.ndarray,
     rows: list[str],
-    recommendation: dict[str, Any] | None,
-    side_to_move: str,
+    move_overlays: list[MoveOverlay],
     corners: list[list[float]],
     xfit: GridFit,
     yfit: GridFit,
@@ -180,17 +278,14 @@ def render_source_recommendation_image(
 ) -> np.ndarray:
     board = [["B" if value in {"X", "x", "B", "b"} else "W" if value in {"O", "o", "W", "w"} else "." for value in row] for row in rows]
     overlay = render_source_overlay(image, corners, board, xfit, yfit, warp_size)
-    move = recommendation.get("move") if recommendation else None
-    if not move:
-        return overlay
-    parsed = parse_gtp_coord(str(move), len(rows))
-    if parsed is None:
-        cv2.putText(overlay, "PASS", (36, 72), cv2.FONT_HERSHEY_SIMPLEX, 1.6, (0, 0, 255), 5, lineType=cv2.LINE_AA)
-        return overlay
-    row, col = parsed
-    point = grid_to_source_point(row, col, corners, xfit, yfit, warp_size)
-    center = (int(round(float(point[0]))), int(round(float(point[1]))))
-    draw_numbered_source_stone(overlay, center, side_to_move, "1")
+    for move_overlay in sorted(move_overlays, key=lambda item: item.label):
+        parsed = parse_gtp_coord(move_overlay.move, len(rows))
+        if parsed is None:
+            continue
+        row, col = parsed
+        point = grid_to_source_point(row, col, corners, xfit, yfit, warp_size)
+        center = (int(round(float(point[0]))), int(round(float(point[1]))))
+        draw_numbered_source_stone(overlay, center, move_overlay.color, str(move_overlay.label))
     return overlay
 
 
@@ -200,8 +295,7 @@ def default_source_result_path() -> Path:
 
 def render_recommendation_board(
     rows: list[str],
-    recommendation: dict[str, Any] | None,
-    side_to_move: str,
+    move_overlays: list[MoveOverlay],
     output_size: int,
 ) -> np.ndarray:
     board_size = len(rows)
@@ -237,16 +331,13 @@ def render_recommendation_board(
             center = (int(round(pad + col_idx * cell)), int(round(pad + row_idx * cell)))
             draw_stone(image, center, stone_radius, value)
 
-    move = recommendation.get("move") if recommendation else None
-    if move:
-        parsed = parse_gtp_coord(str(move), board_size)
+    for move_overlay in sorted(move_overlays, key=lambda item: item.label):
+        parsed = parse_gtp_coord(move_overlay.move, board_size)
         if parsed is None:
-            cv2.putText(image, "PASS", (pad, output_size - pad // 2), cv2.FONT_HERSHEY_SIMPLEX, 1.1, (0, 0, 220), 3, lineType=cv2.LINE_AA)
-        else:
-            row_idx, col_idx = parsed
-            center = (int(round(pad + col_idx * cell)), int(round(pad + row_idx * cell)))
-            occupied = rows[row_idx][col_idx] != "."
-            draw_recommendation_marker(image, center, stone_radius, side_to_move, occupied)
+            continue
+        row_idx, col_idx = parsed
+        center = (int(round(pad + col_idx * cell)), int(round(pad + row_idx * cell)))
+        draw_numbered_source_stone(image, center, move_overlay.color, str(move_overlay.label))
     return image
 
 
@@ -710,9 +801,12 @@ def recommendations_by_level(candidates: list[dict[str, Any]]) -> dict[str, dict
 def build_result(args: argparse.Namespace) -> dict[str, Any]:
     side_to_move = normalize_player(args.side_to_move)
     level = normalize_level(args.level)
-    rows, recognition, image_context = load_board_source(args)
-    if len(rows) != args.board_size:
-        raise SystemExit(f"Expected {args.board_size} board rows, got {len(rows)}")
+    base_rows, recognition, image_context = load_board_source(args)
+    if len(base_rows) != args.board_size:
+        raise SystemExit(f"Expected {args.board_size} board rows, got {len(base_rows)}")
+
+    confirmed_overlays = [parse_move_overlay(raw, len(base_rows)) for raw in args.move_overlay]
+    rows = apply_move_overlays(base_rows, confirmed_overlays)
 
     analysis = run_katago_analysis(
         rows,
@@ -730,6 +824,10 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     selected = by_level["advanced"] if level == "all" else by_level[level]
     root_info = analysis.get("rootInfo", {})
     reason = move_reason(selected, candidates, root_info, side_to_move, level, recognition)
+    next_recommendation_overlay = recommendation_overlay(selected, side_to_move, next_overlay_label(confirmed_overlays), len(rows))
+    display_overlays = list(confirmed_overlays)
+    if next_recommendation_overlay is not None:
+        display_overlays.append(next_recommendation_overlay)
     result = {
         "board_size": len(rows),
         "side_to_move": side_to_move,
@@ -737,6 +835,9 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         "rules": "chinese",
         "komi": args.komi,
         "visits_requested": args.visits,
+        "base_board_ascii": base_rows,
+        "move_overlays": [overlay_to_json(overlay) for overlay in confirmed_overlays],
+        "display_move_overlays": [overlay_to_json(overlay) for overlay in display_overlays],
         "board_ascii": rows,
         "recommendation": selected,
         "reason": reason,
@@ -753,7 +854,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     if recognition is not None:
         result["recognition"] = recognition
     if args.result_image:
-        result_image = render_recommendation_board(rows, selected, side_to_move, args.result_size)
+        result_image = render_recommendation_board(base_rows, display_overlays, args.result_size)
         write_image(args.result_image, result_image)
         result["result_image"] = str(args.result_image)
     source_result_path = args.source_result_image
@@ -764,9 +865,8 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             raise SystemExit("--source-result-image requires image input")
         source_result = render_source_recommendation_image(
             read_image(image_context["source"]),
-            rows,
-            selected,
-            side_to_move,
+            base_rows,
+            display_overlays,
             recognition["board_corners"],
             image_context["xfit"],
             image_context["yfit"],
@@ -785,6 +885,16 @@ def main() -> int:
     parser.add_argument("--input", choices=["auto", "image", "ascii"], default="auto", help="Input kind, default: auto")
     parser.add_argument("--side-to-move", required=True, help="Side to move: black/B/黑 or white/W/白")
     parser.add_argument("--level", default="advanced", help="Move strength: beginner/初级, intermediate/中级, advanced/高级, or all/全部")
+    parser.add_argument(
+        "--move-overlay",
+        action="append",
+        default=[],
+        help=(
+            "Confirmed post-photo move as source:color:move:label, repeatable. "
+            "Example: --move-overlay ai:W:Q4:1 --move-overlay user:B:D16:2. "
+            "Captures are intentionally unsupported; re-shoot/reset when captures occur."
+        ),
+    )
     parser.add_argument("--board-size", type=int, default=19, help="Board size, default: 19")
     parser.add_argument("--komi", type=float, default=7.5, help="Komi, default: 7.5")
     parser.add_argument("--visits", type=int, default=400, help="KataGo visit budget, default: 400")
