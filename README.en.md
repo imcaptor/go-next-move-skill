@@ -41,6 +41,10 @@ If your model is elsewhere, pass `--model /path/to/model.bin.gz`.
 
 ## Image Input
 
+Example input:
+
+![Go board photo input](./docs/examples/input-board.jpg)
+
 ```bash
 python3 scripts/next_move.py /path/to/board.jpg \
   --input image \
@@ -54,6 +58,18 @@ python3 scripts/next_move.py /path/to/board.jpg \
 ```
 
 `--source-overlay` marks detected stones and board corners on the original photo, which is the best user-facing recognition check. For photo input, the tool also generates a combined original-photo result by default: existing white stones are marked with black `W`, existing black stones are marked with white `B`, and the recommended move is drawn as a new stone with the numbered label `1`. If you also want a clean board image, pass `--result-image` explicitly. `--overlay` writes a warped/cropped board view for debugging.
+
+Example outputs:
+
+| Recognition check | Source-photo recommendation |
+| --- | --- |
+| ![Recognition overlay with board boundary and detected stones](./docs/examples/recognition-overlay.jpg) | ![Recommended move drawn on the original photo](./docs/examples/recommendation-source-result.jpg) |
+
+| Warped recognition check | Clean board result |
+| --- | --- |
+| ![Warped board recognition overlay](./docs/examples/recognition-warped-overlay.jpg) | ![Recommended move drawn on a clean board](./docs/examples/recommendation-clean-board.jpg) |
+
+These images are generated from `./docs/examples/input-board.jpg`. With white to move and `--level all --visits 80`, this example recommends `L5`. Exact recommendations can vary with the model, visit count, and configuration.
 
 ## No-Capture Continuation
 
@@ -226,6 +242,8 @@ python3 scripts/go_board_recognition.py /path/to/board.jpg \
   --source-overlay /tmp/go-source-overlay.jpg
 ```
 
+The recognition check marks the board boundary and detected stones, as shown in the `Recognition check` example above.
+
 ## Notes
 
 - A board image usually does not prove whose turn it is, so `--side-to-move` is required.
@@ -233,3 +251,7 @@ python3 scripts/go_board_recognition.py /path/to/board.jpg \
 - Image recognition can be wrong on blurry, skewed, cropped, or heavily annotated boards. Check the overlay when accuracy matters.
 - White-stone recognition checks more than brightness: it also requires low-saturation center evidence and center/ring contrast to reduce false positives from bright wood grain or glare.
 - For high-strength play, use `--level advanced` with a larger `--visits` value.
+
+## License
+
+This project is licensed under [Creative Commons Attribution-NonCommercial 4.0 International](LICENSE). You may copy, share, modify, and redistribute it with attribution, but commercial use is not allowed.
