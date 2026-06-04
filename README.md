@@ -47,6 +47,10 @@ katago version
 
 ## 图片输入
 
+示例输入：
+
+![围棋棋盘照片输入](./docs/examples/input-board.jpg)
+
 ```bash
 python3 scripts/next_move.py /path/to/board.jpg \
   --input image \
@@ -60,6 +64,18 @@ python3 scripts/next_move.py /path/to/board.jpg \
 ```
 
 `--source-overlay` 会在原照片上标出识别到的棋子和棋盘边界，适合给用户检查识别是否正确。对照片输入来说，工具默认也会生成一张合并后的原图结果：已有白子用黑色 `W` 标记，已有黑子用白色 `B` 标记；新推荐落点会画出对应颜色的新棋子，并在新棋子上写序号 `1`。如果你还想要干净棋盘图，可以显式传 `--result-image`；`--overlay` 是透视矫正后的棋盘裁切图，主要用于调试。
+
+示例输出：
+
+| 识别校验图 | 原图推荐结果 |
+| --- | --- |
+| ![识别校验图，标出棋盘边界和识别到的棋子](./docs/examples/recognition-overlay.jpg) | ![原照片上的下一手推荐结果](./docs/examples/recommendation-source-result.jpg) |
+
+| 透视矫正后的识别校验 | 干净棋盘结果图 |
+| --- | --- |
+| ![透视矫正后的棋盘识别校验图](./docs/examples/recognition-warped-overlay.jpg) | ![干净棋盘上的下一手推荐结果](./docs/examples/recommendation-clean-board.jpg) |
+
+上面的示例来自 `./docs/examples/input-board.jpg`。在该局面中以白棋行棋、`--level all --visits 80` 运行时，示例结果推荐白棋走 `L5`。实际推荐会随模型、访问数和配置略有变化。
 
 ## 无提子连续推理
 
@@ -232,6 +248,8 @@ python3 scripts/go_board_recognition.py /path/to/board.jpg \
   --source-overlay /tmp/go-source-overlay.jpg
 ```
 
+识别校验图会标出棋盘边界和识别到的黑白棋，效果可参考上面的 `识别校验图`。
+
 ## 注意
 
 - 单张棋盘图片通常无法判断轮到谁下，所以必须传 `--side-to-move`。
@@ -239,3 +257,7 @@ python3 scripts/go_board_recognition.py /path/to/board.jpg \
 - `--move-overlay` 只适合无提子连续推理；有提子、打劫或任何局面不一致时，重新拍照重置。
 - 白棋识别不只看亮度，还会检查中心低饱和和中心/外环对比，以减少亮木纹或反光空点被误判成白子的情况。
 - 如果想要最强推荐，用 `--level advanced`，并适当增大 `--visits`。
+
+## License
+
+本项目使用 [Creative Commons Attribution-NonCommercial 4.0 International](LICENSE) 许可。你可以复制、分享、修改和再发布，但需要保留署名，且不能用于商业用途。
