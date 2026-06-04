@@ -250,6 +250,12 @@ def draw_numbered_source_stone(image: np.ndarray, center: tuple[int, int], side_
     stone_radius = max(18, int(round(min(height, width) / 43)))
     shadow_offset = max(2, stone_radius // 9)
     blend_circle(image, (center[0] + shadow_offset, center[1] + shadow_offset), stone_radius, (50, 60, 78), 0.20)
+    try:
+        label_number = int(label)
+    except ValueError:
+        label_number = 1
+    ring_color = (255, 126, 52) if label_number % 2 == 1 else (70, 165, 92)
+    cv2.circle(image, center, stone_radius + max(3, stone_radius // 7), ring_color, max(3, stone_radius // 8), lineType=cv2.LINE_AA)
     if side_to_move == "W":
         cv2.circle(image, center, stone_radius, (238, 235, 222), -1, lineType=cv2.LINE_AA)
         cv2.circle(image, (center[0] - stone_radius // 4, center[1] - stone_radius // 4), max(3, stone_radius // 3), (255, 252, 244), -1, lineType=cv2.LINE_AA)
