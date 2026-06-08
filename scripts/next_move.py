@@ -28,6 +28,11 @@ DEFAULT_MODEL = "/opt/homebrew/share/katago/g170e-b20c256x2-s5303129600-d1228401
 DEFAULT_ANALYSIS_CONFIG = "/opt/homebrew/share/katago/configs/analysis_example.cfg"
 DEFAULT_SKILL_CONFIG = Path("katago") / "analysis_skill.cfg"
 GTP_COLUMNS = "ABCDEFGHJKLMNOPQRSTUVWXYZ"
+SEQUENTIAL_COLUMNS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+COORDINATE_COLUMNS = {
+    "gtp": GTP_COLUMNS,
+    "sequential": SEQUENTIAL_COLUMNS,
+}
 LEVEL_ALIASES = {
     "beginner": "beginner",
     "初级": "beginner",
@@ -78,32 +83,58 @@ def normalize_overlay_source(raw: str) -> str:
     raise SystemExit("Move overlay source must be ai/recommendation/推荐 or user/human/manual/人工")
 
 
-def gtp_coord(row: int, col: int, board_size: int) -> str:
-    if col >= len(GTP_COLUMNS):
-        raise SystemExit(f"Board size {board_size} is too large for the built-in GTP column table")
-    return f"{GTP_COLUMNS[col]}{board_size - row}"
+def format_coord(row: int, col: int, board_size: int, coordinate_style: str) -> str:
+    columns = COORDINATE_COLUMNS[coordinate_style]
+    if col >= len(columns):
+        raise SystemExit(
+            f"Board size {board_size} is too large for the {coordinate_style} coordinate column table"
+        )
+    return f"{columns[col]}{board_size - row}"
 
 
-def parse_gtp_coord(move: str, board_size: int) -> tuple[int, int] | None:
+def parse_coord(move: str, board_size: int, coordinate_style: str) -> tuple[int, int] | None:
     value = move.strip().upper()
     if value in {"PASS", "RESIGN"}:
         return None
     if len(value) < 2:
-        raise SystemExit(f"Bad GTP move: {move}")
-    col = GTP_COLUMNS.find(value[0])
+        raise SystemExit(f"Bad {coordinate_style} move: {move}")
+    columns = COORDINATE_COLUMNS[coordinate_style]
+    col = columns.find(value[0])
     if col < 0 or col >= board_size:
-        raise SystemExit(f"Bad GTP move column: {move}")
+        raise SystemExit(f"Bad {coordinate_style} move column: {move}")
     try:
         number = int(value[1:])
     except ValueError as exc:
-        raise SystemExit(f"Bad GTP move row: {move}") from exc
+        raise SystemExit(f"Bad {coordinate_style} move row: {move}") from exc
     row = board_size - number
     if not 0 <= row < board_size:
-        raise SystemExit(f"Bad GTP move row: {move}")
+        raise SystemExit(f"Bad {coordinate_style} move row: {move}")
     return row, col
 
 
-def parse_move_overlay(raw: str, board_size: int) -> MoveOverlay:
+def convert_coord(move: str, board_size: int, from_style: str, to_style: str) -> str:
+    value = move.strip().upper()
+    if value in {"PASS", "RESIGN"}:
+        return value
+    parsed = parse_coord(value, board_size, from_style)
+    if parsed is None:
+        return value
+    return format_coord(*parsed, board_size, to_style)
+
+
+def convert_move_info(move: dict[str, Any], board_size: int, coordinate_style: str) -> dict[str, Any]:
+    converted = dict(move)
+    if "move" in converted:
+        converted["move"] = convert_coord(str(converted["move"]), board_size, "gtp", coordinate_style)
+    if "pv" in converted:
+        converted["pv"] = [
+            convert_coord(str(item), board_size, "gtp", coordinate_style)
+            for item in converted["pv"]
+        ]
+    return converted
+
+
+def parse_move_overlay(raw: str, board_size: int, coordinate_style: str) -> MoveOverlay:
     parts = [part.strip() for part in raw.replace(",", ":").split(":")]
     if len(parts) != 4 or any(not part for part in parts):
         raise SystemExit(
@@ -113,7 +144,7 @@ def parse_move_overlay(raw: str, board_size: int) -> MoveOverlay:
     source = normalize_overlay_source(parts[0])
     color = normalize_player(parts[1])
     move = parts[2].upper()
-    if parse_gtp_coord(move, board_size) is None:
+    if parse_coord(move, board_size, coordinate_style) is None:
         raise SystemExit("--move-overlay does not support PASS/RESIGN because it must draw and compose a board point")
     try:
         label = int(parts[3])
@@ -138,11 +169,12 @@ def recommendation_overlay(
     side_to_move: str,
     label: int,
     board_size: int,
+    coordinate_style: str,
 ) -> MoveOverlay | None:
     move = recommendation.get("move") if recommendation else None
     if not move:
         return None
-    if parse_gtp_coord(str(move), board_size) is None:
+    if parse_coord(str(move), board_size, coordinate_style) is None:
         return None
     return MoveOverlay(source="ai", color=side_to_move, move=str(move).upper(), label=label)
 
@@ -153,7 +185,11 @@ def next_overlay_label(overlays: list[MoveOverlay]) -> int:
     return max(overlay.label for overlay in overlays) + 1
 
 
-def apply_move_overlays(rows: list[str], overlays: list[MoveOverlay]) -> list[str]:
+def apply_move_overlays(
+    rows: list[str],
+    overlays: list[MoveOverlay],
+    coordinate_style: str,
+) -> list[str]:
     board = [list(row) for row in rows]
     board_size = len(rows)
     seen_labels: set[int] = set()
@@ -161,7 +197,7 @@ def apply_move_overlays(rows: list[str], overlays: list[MoveOverlay]) -> list[st
         if overlay.label in seen_labels:
             raise SystemExit(f"Duplicate move overlay label: {overlay.label}")
         seen_labels.add(overlay.label)
-        parsed = parse_gtp_coord(overlay.move, board_size)
+        parsed = parse_coord(overlay.move, board_size, coordinate_style)
         if parsed is None:
             raise SystemExit(f"Move overlay cannot be PASS/RESIGN: {overlay.move}")
         row, col = parsed
@@ -204,9 +240,9 @@ def board_ascii_to_initial_stones(rows: list[str]) -> list[list[str]]:
     for row_idx, row in enumerate(rows):
         for col_idx, value in enumerate(row):
             if value in {"X", "x", "B", "b"}:
-                stones.append(["B", gtp_coord(row_idx, col_idx, size)])
+                stones.append(["B", format_coord(row_idx, col_idx, size, "gtp")])
             elif value in {"O", "o", "W", "w"}:
-                stones.append(["W", gtp_coord(row_idx, col_idx, size)])
+                stones.append(["W", format_coord(row_idx, col_idx, size, "gtp")])
     return stones
 
 
@@ -281,11 +317,12 @@ def render_source_recommendation_image(
     xfit: GridFit,
     yfit: GridFit,
     warp_size: int,
+    coordinate_style: str,
 ) -> np.ndarray:
     board = [["B" if value in {"X", "x", "B", "b"} else "W" if value in {"O", "o", "W", "w"} else "." for value in row] for row in rows]
     overlay = render_source_overlay(image, corners, board, xfit, yfit, warp_size)
     for move_overlay in sorted(move_overlays, key=lambda item: item.label):
-        parsed = parse_gtp_coord(move_overlay.move, len(rows))
+        parsed = parse_coord(move_overlay.move, len(rows), coordinate_style)
         if parsed is None:
             continue
         row, col = parsed
@@ -303,6 +340,7 @@ def render_recommendation_board(
     rows: list[str],
     move_overlays: list[MoveOverlay],
     output_size: int,
+    coordinate_style: str,
 ) -> np.ndarray:
     board_size = len(rows)
     image = np.full((output_size, output_size, 3), (94, 166, 214), dtype=np.uint8)
@@ -338,7 +376,7 @@ def render_recommendation_board(
             draw_stone(image, center, stone_radius, value)
 
     for move_overlay in sorted(move_overlays, key=lambda item: item.label):
-        parsed = parse_gtp_coord(move_overlay.move, board_size)
+        parsed = parse_coord(move_overlay.move, board_size, coordinate_style)
         if parsed is None:
             continue
         row_idx, col_idx = parsed
@@ -807,12 +845,16 @@ def recommendations_by_level(candidates: list[dict[str, Any]]) -> dict[str, dict
 def build_result(args: argparse.Namespace) -> dict[str, Any]:
     side_to_move = normalize_player(args.side_to_move)
     level = normalize_level(args.level)
+    coordinate_style = getattr(args, "coordinate_style", "gtp")
     base_rows, recognition, image_context = load_board_source(args)
     if len(base_rows) != args.board_size:
         raise SystemExit(f"Expected {args.board_size} board rows, got {len(base_rows)}")
 
-    confirmed_overlays = [parse_move_overlay(raw, len(base_rows)) for raw in args.move_overlay]
-    rows = apply_move_overlays(base_rows, confirmed_overlays)
+    confirmed_overlays = [
+        parse_move_overlay(raw, len(base_rows), coordinate_style)
+        for raw in args.move_overlay
+    ]
+    rows = apply_move_overlays(base_rows, confirmed_overlays, coordinate_style)
 
     analysis = run_katago_analysis(
         rows,
@@ -825,17 +867,27 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
         skill_config=args.skill_config,
     )
     move_infos = sorted(analysis.get("moveInfos", []), key=lambda item: item.get("order", 999999))
-    candidates = [slim_move_info(move) for move in move_infos[: args.top_candidates]]
+    candidates = [
+        slim_move_info(convert_move_info(move, len(rows), coordinate_style))
+        for move in move_infos[: args.top_candidates]
+    ]
     by_level = recommendations_by_level(candidates)
     selected = by_level["advanced"] if level == "all" else by_level[level]
     root_info = analysis.get("rootInfo", {})
     reason = move_reason(selected, candidates, root_info, side_to_move, level, recognition)
-    next_recommendation_overlay = recommendation_overlay(selected, side_to_move, next_overlay_label(confirmed_overlays), len(rows))
+    next_recommendation_overlay = recommendation_overlay(
+        selected,
+        side_to_move,
+        next_overlay_label(confirmed_overlays),
+        len(rows),
+        coordinate_style,
+    )
     display_overlays = list(confirmed_overlays)
     if next_recommendation_overlay is not None:
         display_overlays.append(next_recommendation_overlay)
     result = {
         "board_size": len(rows),
+        "coordinate_style": coordinate_style,
         "side_to_move": side_to_move,
         "requested_level": level,
         "rules": "chinese",
@@ -860,7 +912,12 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
     if recognition is not None:
         result["recognition"] = recognition
     if args.result_image:
-        result_image = render_recommendation_board(base_rows, display_overlays, args.result_size)
+        result_image = render_recommendation_board(
+            base_rows,
+            display_overlays,
+            args.result_size,
+            coordinate_style,
+        )
         write_image(args.result_image, result_image)
         result["result_image"] = str(args.result_image)
     source_result_path = args.source_result_image
@@ -877,6 +934,7 @@ def build_result(args: argparse.Namespace) -> dict[str, Any]:
             image_context["xfit"],
             image_context["yfit"],
             args.warp_size,
+            coordinate_style,
         )
         write_image(source_result_path, source_result)
         result["source_result_image"] = str(source_result_path)
@@ -892,11 +950,18 @@ def main() -> int:
     parser.add_argument("--side-to-move", required=True, help="Side to move: black/B/黑 or white/W/白")
     parser.add_argument("--level", default="advanced", help="Move strength: beginner/初级, intermediate/中级, advanced/高级, or all/全部")
     parser.add_argument(
+        "--coordinate-style",
+        choices=sorted(COORDINATE_COLUMNS),
+        default="gtp",
+        help="Coordinate letters: gtp skips I (default); sequential includes I",
+    )
+    parser.add_argument(
         "--move-overlay",
         action="append",
         default=[],
         help=(
             "Confirmed post-photo move as source:color:move:label, repeatable. "
+            "Coordinates use --coordinate-style. "
             "Example: --move-overlay ai:W:Q4:1 --move-overlay user:B:D16:2. "
             "Captures are intentionally unsupported; re-shoot/reset when captures occur."
         ),
