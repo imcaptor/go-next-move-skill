@@ -12,6 +12,7 @@
 - 支持直接输入已有的 `board_ascii` 文本棋盘。
 - 使用本地 KataGo 进行下一手分析。
 - 输出 JSON，包含当前级别推荐手、三档级别推荐、候选手和根节点评估。
+- 默认使用标准 GTP 坐标，也支持包含 `I` 的连续字母坐标。
 - 可选生成识别校验图，方便人工检查棋子识别是否准确。
 - 支持在不重新拍照的情况下追加“AI 推荐”和“人工录入”的无提子落子历史，并在结果图上连续编号。
 
@@ -77,6 +78,22 @@ python3 scripts/next_move.py /path/to/board.jpg \
 
 上面的示例来自 `./docs/examples/input-board.jpg`。在该局面中以白棋行棋、`--level all --visits 80` 运行时，示例结果推荐白棋走 `L5`。实际推荐会随模型、访问数和配置略有变化。
 
+## 坐标格式
+
+默认使用标准 GTP 坐标，列字母跳过 `I`：
+
+```bash
+--coordinate-style gtp
+```
+
+如果实体棋盘使用包含 `I` 的连续字母 `A-S`，请传：
+
+```bash
+--coordinate-style sequential
+```
+
+例如，同一个第 9 列落点在 GTP 格式中是 `J4`，在连续字母格式中是 `I4`；第 19 列分别是 `T4` 和 `S4`。KataGo 通信始终使用 GTP 坐标，但 `--move-overlay` 输入、JSON 输出、推荐说明和主变化会统一采用所选格式。一次调用不要混用两种格式。
+
 ## 无提子连续推理
 
 如果拍照后没有发生提子，可以把后续已确认落子作为 overlay 追加进去。原始图片识别状态会保留在 `base_board_ascii`，追加落子保存在 `move_overlays`，实际送入 KataGo 的合成局面保存在 `board_ascii`。
@@ -89,7 +106,7 @@ python3 scripts/next_move.py /path/to/board.jpg \
 
 - `source`：`ai` 或 `user`
 - `color`：`B` / `black` / `黑`，或 `W` / `white` / `白`
-- `move`：GTP 坐标，例如 `Q4`
+- `move`：所选坐标格式中的落点，例如默认 GTP 格式的 `Q4`
 - `label`：图片上显示的手数序号
 
 示例：白棋第一手是 AI 推荐，黑棋第二手是人工录入，然后继续推白棋第三手：
@@ -98,7 +115,8 @@ python3 scripts/next_move.py /path/to/board.jpg \
 python3 scripts/next_move.py /path/to/board.jpg \
   --input image \
   --side-to-move white \
-  --move-overlay ai:W:Q4:1 \
+  --coordinate-style sequential \
+  --move-overlay ai:W:I4:1 \
   --move-overlay user:B:D16:2 \
   --source-result-image /tmp/go-step-3.jpg
 ```
@@ -185,6 +203,7 @@ cat board_ascii.txt | python3 scripts/next_move.py \
 脚本输出 JSON。重要字段：
 
 - `recommendation`：按 `--level` 选出的推荐手
+- `coordinate_style`：本次输入和输出使用的坐标格式
 - `base_board_ascii`：原始图片或文本输入识别出的棋盘，不包含拍照后的追加落子
 - `move_overlays`：已确认的拍照后落子历史，例如 AI 推荐和人工录入
 - `display_move_overlays`：用于结果图绘制的落子序号，包含已确认历史和本次新推荐

@@ -84,6 +84,8 @@ python3 scripts/next_move.py /path/to/board.jpg \
 
 This preserves the original recognized board in `base_board_ascii`, stores confirmed post-photo moves in `move_overlays`, sends the composed board in `board_ascii` to KataGo, and draws all confirmed moves plus the new recommendation in `display_move_overlays`. Do not use this mode after captures; re-shoot/reset the board and analyze one move from the new photo.
 
+Coordinates default to standard GTP letters, which skip `I`. When the user's physical board uses sequential `A-S` letters including `I`, pass `--coordinate-style sequential`. Use that same style for every `--move-overlay`; the returned recommendation, candidate moves, PVs, explanations, and numbered overlays will use it consistently. KataGo communication remains GTP internally.
+
 For an already recognized board:
 
 ```bash
@@ -102,6 +104,7 @@ python3 scripts/next_move.py /path/to/board_ascii.txt \
 The script returns JSON containing:
 
 - `board_ascii`
+- `coordinate_style`
 - `base_board_ascii`
 - `move_overlays`
 - `display_move_overlays`

@@ -10,6 +10,7 @@ The key idea is that `beginner`, `intermediate`, and `advanced` control **move s
 - Accept an existing `board_ascii` position from a text file or stdin.
 - Use local KataGo for next-move analysis.
 - Return JSON with the selected move, all level-based recommendations, candidate moves, and root evaluation.
+- Use standard GTP coordinates by default, with an option for sequential letters including `I`.
 - Optionally write a board recognition overlay image for visual checking.
 - Continue a no-capture sequence without re-shooting by adding numbered AI-recommended and user-entered move overlays.
 
@@ -71,6 +72,22 @@ Example outputs:
 
 These images are generated from `./docs/examples/input-board.jpg`. With white to move and `--level all --visits 80`, this example recommends `L5`. Exact recommendations can vary with the model, visit count, and configuration.
 
+## Coordinate Styles
+
+The default is standard GTP coordinates, whose column letters skip `I`:
+
+```bash
+--coordinate-style gtp
+```
+
+For a physical board labeled with sequential `A-S` letters including `I`, use:
+
+```bash
+--coordinate-style sequential
+```
+
+For example, the same ninth-column point is `J4` in GTP style and `I4` in sequential style; the nineteenth column is `T4` and `S4`, respectively. KataGo communication always uses GTP coordinates, while `--move-overlay` input, JSON output, recommendation text, and principal variations consistently use the selected style. Do not mix styles within one invocation.
+
 ## No-Capture Continuation
 
 When no captures have happened after the photo, confirmed follow-up moves can be added as overlays. The original recognized position stays in `base_board_ascii`, confirmed post-photo moves are stored in `move_overlays`, and the composed position sent to KataGo is stored in `board_ascii`.
@@ -83,7 +100,7 @@ Format:
 
 - `source`: `ai` or `user`
 - `color`: `B` / `black`, or `W` / `white`
-- `move`: GTP coordinate, for example `Q4`
+- `move`: coordinate in the selected style, for example `Q4` in the default GTP style
 - `label`: move number drawn on the result image
 
 Example: white move 1 was AI-recommended, black move 2 was entered manually, then ask for white move 3:
@@ -92,7 +109,8 @@ Example: white move 1 was AI-recommended, black move 2 was entered manually, the
 python3 scripts/next_move.py /path/to/board.jpg \
   --input image \
   --side-to-move white \
-  --move-overlay ai:W:Q4:1 \
+  --coordinate-style sequential \
+  --move-overlay ai:W:I4:1 \
   --move-overlay user:B:D16:2 \
   --source-result-image /tmp/go-step-3.jpg
 ```
@@ -179,6 +197,7 @@ The current selection policy uses candidate rank plus score and winrate loss fro
 The script prints JSON. Important fields:
 
 - `recommendation`: the move selected for `--level`
+- `coordinate_style`: the coordinate style used for input and output
 - `base_board_ascii`: the original recognized/input board, without post-photo move overlays
 - `move_overlays`: confirmed post-photo move history, such as AI recommendations and user-entered moves
 - `display_move_overlays`: numbered moves drawn on the result image, including confirmed history and the new recommendation
